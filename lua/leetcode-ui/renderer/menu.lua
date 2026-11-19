@@ -122,7 +122,10 @@ function Menu:set_page(name)
 end
 
 function Menu:apply_options()
-    api.nvim_buf_set_name(self.bufnr, "")
+    -- A name instead of `[Scratch]` in the tabline and statusline.
+    if not pcall(api.nvim_buf_set_name, self.bufnr, "LeetCode") then
+        api.nvim_buf_set_name(self.bufnr, "")
+    end
 
     ui_utils.buf_set_opts(self.bufnr, {
         modifiable = false,
@@ -208,10 +211,6 @@ function Menu:mount()
 end
 
 function Menu:_mount()
-    -- A name instead of `[Scratch]` in the tabline and statusline.
-    if vim.fn.bufname(self.bufnr) == "" then
-        pcall(api.nvim_buf_set_name, self.bufnr, "LeetCode")
-    end
     self:apply_options()
     self:autocmds()
     self:draw()
