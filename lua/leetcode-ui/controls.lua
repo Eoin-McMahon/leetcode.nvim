@@ -147,6 +147,8 @@ function Controls.highlights()
     vim.api.nvim_set_hl(0, "leetcode_ctl_run", { link = "DiagnosticOk", default = true })
     vim.api.nvim_set_hl(0, "leetcode_ctl_submit", { link = "DiagnosticInfo", default = true })
     vim.api.nvim_set_hl(0, "leetcode_ctl_key", { link = "Comment", default = true })
+    vim.api.nvim_set_hl(0, "leetcode_ctl_tab_active", { link = "Title", default = true })
+    vim.api.nvim_set_hl(0, "leetcode_ctl_tab", { link = "Comment", default = true })
 end
 
 return Controls

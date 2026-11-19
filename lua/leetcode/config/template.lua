@@ -86,6 +86,20 @@ local M = {
     ---@type table<string, string>
     hint_keys = {},
 
+    ---"classic" keeps the floating console. "splits" opens description, code,
+    ---testcase and result as real windows.
+    ---@type "classic"|"splits"
+    layout = "classic",
+
+    splits = {
+        preset = "website", ---@type "website"|"wide"
+        side = { width = 0.4 }, ---@type { width: number } fraction of the tab
+        console = {
+            size = 0.35, ---@type number height in "website", width in "wide"
+            result_ratio = 0.5, ---@type number result share of the console
+        },
+    },
+
     console = {
         open_on_runcode = true, ---@type boolean
 

@@ -277,6 +277,10 @@ function Question:_unmount()
         self.info:unmount()
         self.console:unmount()
         self.description:unmount()
+        if self.layout then
+            self.layout:unmount()
+            self.layout = nil
+        end
 
         if self.bufnr and vim.api.nvim_buf_is_valid(self.bufnr) then
             vim.api.nvim_buf_delete(self.bufnr, { force = true, unload = false })
@@ -310,8 +314,12 @@ end
 function Question:handle_mount()
     self:create_buffer()
 
-    self.description = Description(self):mount()
-    self.console = Console(self)
+    if config.user.layout == "splits" then
+        self:mount_splits()
+    else
+        self.description = Description(self):mount()
+        self.console = Console(self)
+    end
     self.info = Info(self)
 
     table.insert(_Lc_state.questions, self)
@@ -324,6 +332,75 @@ end
 
 ---Open the question from the disk cache when possible, otherwise once the
 ---fetch returns. The network is never waited on synchronously.
+---Build the splits layout. The description object keeps its populate and
+---renderer code but draws into the side pane's window, and its show, hide and
+---toggle route to the layout so existing commands keep working.
+function Question:mount_splits()
+    local stop_timing = timings.start("splits mount")
+    local description = Description(self)
+    description.bufnr = vim.api.nvim_create_buf(false, true)
+    self.description = description
+
+    local Layout = require("leetcode-ui.splits")
+    self.layout = Layout.new(self)
+    self.console = self.layout.console
+
+    local layout = self.layout
+    description.show = function()
+        layout:show("side")
+    end
+    description.hide = function()
+        layout:hide("side")
+    end
+    description.toggle = function()
+        layout:toggle("side")
+    end
+    description.unmount = function() end
+    description.mount = function()
+        return description
+    end
+
+    layout:apply()
+    description.winid = layout.panes.side.winid
+    description:populate()
+    description.renderer.bufnr = description.bufnr
+    description:draw()
+    self:watch_side_resize()
+    stop_timing()
+end
+
+---Redraw the description when the side pane's width changes. Debounced, since
+---`WinResized` fires on every step of a drag.
+function Question:watch_side_resize()
+    local timer = vim.uv.new_timer()
+    local last_width
+    local side = self.layout.panes.side
+
+    vim.api.nvim_create_autocmd("WinResized", {
+        group = group,
+        callback = function()
+            if not (self.layout and side:is_open()) then
+                return
+            end
+            if not vim.tbl_contains(vim.v.event.windows or {}, side.winid) then
+                return
+            end
+            timer:stop()
+            timer:start(50, 0, vim.schedule_wrap(function()
+                if not side:is_open() then
+                    return
+                end
+                local width = vim.api.nvim_win_get_width(side.winid)
+                if width ~= last_width then
+                    last_width = width
+                    self.description.winid = side.winid
+                    self.description:draw()
+                end
+            end))
+        end,
+    })
+end
+
 function Question:mount()
     local slug = self.cache.title_slug
     local tabp = utils.detect_duplicate_question(slug, config.lang)

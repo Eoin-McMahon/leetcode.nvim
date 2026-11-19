@@ -474,6 +474,31 @@ function cmd.fold()
     q:editor_fold_imports(true)
 end
 
+---@param name lc.splits.PaneName
+function cmd.pane_toggle(name)
+    return function()
+        local q = require("leetcode.utils").curr_question()
+        if not q then
+            return
+        end
+        if not q.layout then
+            return log.warn("Pane toggles need `layout = \"splits\"`")
+        end
+        q.layout:toggle(name)
+    end
+end
+
+function cmd.layout_cycle()
+    local q = require("leetcode.utils").curr_question()
+    if not q then
+        return
+    end
+    if not q.layout then
+        return log.warn("Layout presets need `layout = \"splits\"`")
+    end
+    q.layout:set_preset()
+end
+
 function cmd.tags_toggle()
     local q = require("leetcode.utils").curr_question()
     if q then
@@ -692,6 +717,12 @@ cmd.commands = {
     fold = { cmd.fold },
     timings = { cmd.timings },
     tags = { cmd.tags_toggle },
+    layout = { cmd.layout_cycle },
+    pane = {
+        side = { cmd.pane_toggle("side") },
+        testcase = { cmd.pane_toggle("testcase") },
+        result = { cmd.pane_toggle("result") },
+    },
     -- session = {
     --     change = {
     --         cmd.change_session,

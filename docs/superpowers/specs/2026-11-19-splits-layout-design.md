@@ -118,6 +118,9 @@ website                          wide
 - Switching preset closes every managed window except the code window and opens
   the other preset. Buffers survive, so testcase edits and results stay.
 - Opening a pane whose parent is hidden falls back to the code window as parent.
+- Any show, hide or preset change closes all panes and reopens the visible ones
+  in preset order. It is the only way to keep the side pane full height after
+  the console changes. Measured at 0.1 to 0.2 ms per rebuild.
 
 ### Panes, hiding and hints
 
@@ -150,6 +153,19 @@ website                          wide
   article in the same tab buffer, `<BS>` goes back to the list. Submissions
   shows status, runtime, memory and time; `<CR>` loads that submission's code
   into the editor's code section, reusing `editor_section_replace`.
+
+### Premium content
+
+Premium items stay visible with a lock icon (`󰌾`) and fail softly:
+
+- Editorial tab is always present. A locked article renders one line, "Editorial
+  is a Premium feature", in the tab buffer.
+- Premium-only questions stay in the picker with the lock. Opening one shows the
+  same one-line message instead of a code window.
+- Locked articles in the Solutions list behave the same.
+
+Locked state comes from what the API returns, not only from `is_premium`, so a
+premium account works without config changes.
 
 ### Console
 
