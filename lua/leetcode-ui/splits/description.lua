@@ -352,6 +352,35 @@ local function li_lines(segs, width, first, cont)
     return lines
 end
 
+local LABEL_HLS = {
+    leetcode_desc_input = true,
+    leetcode_desc_output = true,
+    leetcode_desc_explain = true,
+}
+
+---Lines of an example part. A label ("Input:") gets its own line and the
+---value goes under it, so wrapped values line up with the rest.
+---@param segs lc.desc.Seg[]
+---@param width integer
+---@param inner string indent of the block's text
+local function block_lines(segs, width, inner)
+    local first = segs[1]
+    if not (first and LABEL_HLS[first.hl]) then
+        return wrap(segs, width, inner, inner .. "  ")
+    end
+    local label = vim.trim(first.text):gsub(":$", "")
+    local lines = { { text = inner .. label, marks = { { col = #inner, end_col = #inner + #label, hl = first.hl } } } }
+    local rest = vim.list_slice(segs, 2)
+    while rest[1] and vim.trim(rest[1].text) == "" do
+        table.remove(rest, 1)
+    end
+    if rest[1] then
+        rest[1] = { text = (rest[1].text:gsub("^%s+", "")), hl = rest[1].hl }
+        vim.list_extend(lines, wrap(rest, width, inner, inner .. "  "))
+    end
+    return lines
+end
+
 ---@param n number
 local function short(n)
     n = tonumber(n) or 0
@@ -383,7 +412,7 @@ function Render.render(q, win_width)
         if line_hl == "leetcode_desc_block" then
             local from = 0
             for _, m in ipairs(marks or {}) do
-                if m.hl == "leetcode_desc_input" or m.hl == "leetcode_desc_output" or m.hl == "leetcode_desc_explain" then
+                if LABEL_HLS[m.hl] or m.hl == "leetcode_desc_example" then
                     from = math.max(from, m.end_col)
                 end
             end
@@ -456,21 +485,46 @@ function Render.render(q, win_width)
     add("")
 
     local prev, prev_li_lines = nil, 0
-    for _, b in ipairs(Render.parse(data.content or "")) do
-        if not b.shaded and b.kind ~= "pre" then
+    -- Set while an example's title opened its shaded block, so the example
+    -- body continues that block instead of starting a new one.
+    local example_open = false
+    local blocks = Render.parse(data.content or "")
+    for bi, b in ipairs(blocks) do
+        if not b.shaded and b.kind ~= "pre" and not (example_open and b.kind == "img") then
             close_block()
         end
         if prev and prev.kind == "li" and b.kind ~= "li" and not b.shaded then
             blank()
         end
-        if b.kind == "heading" then
+        -- The block an example title introduces, past any images.
+        local next_block
+        for j = bi + 1, #blocks do
+            if blocks[j].kind ~= "img" then
+                next_block = blocks[j]
+                break
+            end
+        end
+        if b.kind == "heading" and b.segs[1].text:match("^Example") and next_block and (next_block.kind == "pre" or next_block.shaded) then
+            -- The example's title is the first row of its shaded block.
+            blank()
+            open_block()
+            local text = PAD .. "  " .. b.segs[1].text
+            add(text, { { col = #PAD + 2, end_col = #text, hl = "leetcode_desc_example" } }, "leetcode_desc_block")
+            add(PAD, nil, "leetcode_desc_block")
+            example_open = true
+        elseif b.kind == "heading" then
             blank()
             local text = PAD .. b.segs[1].text
             add(text, { { col = #PAD, end_col = #text, hl = "leetcode_desc_heading" } })
         elseif b.kind == "img" then
-            local text = ("%s%s image  (gx to open)"):format(PAD, config.icons.image)
-            add(text, { { col = #PAD, end_col = #text, hl = "leetcode_desc_dim" } })
+            -- Inside an example, the image line is part of its block.
+            local inner = PAD .. (example_open and "  " or "")
+            local text = ("%s%s image  (gx to open)"):format(inner, config.icons.image)
+            add(text, { { col = #inner, end_col = #text, hl = "leetcode_desc_dim" } }, example_open and "leetcode_desc_block" or nil)
             out.links[#out.lines] = b.url
+            if example_open then
+                add(PAD, nil, "leetcode_desc_block")
+            end
         elseif b.kind == "pre" then
             -- Rebuild per line so bold labels ("Input:") keep their style.
             local seg_lines, current = {}, {}
@@ -493,17 +547,20 @@ function Render.render(q, win_width)
             while #seg_lines > 0 and #seg_lines[#seg_lines] == 0 do
                 table.remove(seg_lines)
             end
-            close_block()
-            open_block()
+            if not example_open then
+                close_block()
+                open_block()
+            end
+            example_open = false
             for n, segs in ipairs(seg_lines) do
                 -- A blank shaded row before each label after the first, so
                 -- Input, Output and Explanation read as separate parts.
                 local first = segs[1]
                 local prev_blank = vim.trim(out.lines[#out.lines] or "") == ""
-                if n > 1 and not prev_blank and first and (first.hl == "leetcode_desc_input" or first.hl == "leetcode_desc_output" or first.hl == "leetcode_desc_explain") then
+                if n > 1 and not prev_blank and first and LABEL_HLS[first.hl] then
                     add(PAD, nil, "leetcode_desc_block")
                 end
-                for _, l in ipairs(wrap(segs, width - 2, PAD .. "  ", PAD .. "    ")) do
+                for _, l in ipairs(block_lines(segs, width - 2, PAD .. "  ")) do
                     add(l.text, l.marks, "leetcode_desc_block")
                 end
             end
@@ -529,11 +586,11 @@ function Render.render(q, win_width)
             end
         else
             local inner = PAD .. (b.shaded and "  " or "")
-            local lines = wrap(b.segs, width - (b.shaded and 2 or 0), inner, inner)
+            local lines = b.shaded and block_lines(b.segs, width - 2, inner) or wrap(b.segs, width, inner, inner)
             if b.shaded then
+                example_open = false
                 local first = b.segs[1]
-                local labelled = first
-                    and (first.hl == "leetcode_desc_input" or first.hl == "leetcode_desc_output" or first.hl == "leetcode_desc_explain")
+                local labelled = first and LABEL_HLS[first.hl]
                 if labelled and in_block() and vim.trim(out.lines[#out.lines]) ~= "" then
                     add(PAD, nil, "leetcode_desc_block")
                 end
