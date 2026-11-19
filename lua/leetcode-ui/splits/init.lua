@@ -323,27 +323,6 @@ function Layout.hints(q)
     return table.concat(parts, "  ")
 end
 
----Reset and add-failed-case buttons, right-aligned in the code winbar.
----@param q lc.ui.Question
----@return string?
-function Layout.actions(q)
-    if not q.layout then
-        return
-    end
-    local function button(fn, icon, label, key_name)
-        local key = Controls.display_key(config.user.hint_keys[key_name])
-        return ("%%@v:lua._leetcode_ctl.%s@%%#leetcode_ctl_action# %s %s%s %%X%%*"):format(
-            fn,
-            icon,
-            label,
-            key and (" %#leetcode_ctl_key#" .. key) or ""
-        )
-    end
-        return button("reset", config.icons.reset, "Reset cases", "reset")
-        .. button("add_case", config.icons.add, "Add failed case", "add_case")
-end
-
-table.insert(Controls.segments, Layout.actions)
 table.insert(Controls.segments, Layout.hints)
 
 function Layout:unmount()

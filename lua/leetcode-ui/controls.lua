@@ -105,36 +105,36 @@ local function key_label(key)
     if not shown then
         return ""
     end
-    return (" %%#leetcode_ctl_key#%s"):format(shown)
+    return (" %%#leetcode_ctl_key#(%s)"):format(shown)
+end
+
+---A clickable `icon (key)` winbar button.
+---@param fn string `_G._leetcode_ctl` handler name
+---@param icon string
+---@param hl string
+---@param key_name string `hint_keys` entry
+function Controls.button(fn, icon, hl, key_name)
+    return ("%%@v:lua._leetcode_ctl.%s@%%#%s# %s%s %%X%%*"):format(fn, hl, icon, key_label(config.user.hint_keys[key_name]))
 end
 
 ---@param q lc.ui.Question
----@param name "run"|"submit"
+---@param name "run"|"submit"|"debug"
 ---@param icon string
----@param label string
-local function button(q, name, icon, label)
+local function button(q, name, icon)
     local s = state[q]
     local busy = s and s.action == name
     local hl = ({ run = "leetcode_ctl_run", submit = "leetcode_ctl_submit" })[name] or "leetcode_ctl_debug"
-    local glyph = busy and SPINNER[s.frame] or icon
-
-    return ("%%@v:lua._leetcode_ctl.%s@%%#%s# %s %s%s %%X%%*"):format(
-        name,
-        hl,
-        glyph,
-        label,
-        key_label(config.user.hint_keys[name])
-    )
+    return Controls.button(name, busy and SPINNER[s.frame] or icon, hl, name)
 end
 
 ---@param q lc.ui.Question
 function Controls.build(q)
     local parts = {
-        button(q, "run", config.icons.run, "Run"),
-        "  ",
-        button(q, "submit", config.icons.submit, "Submit"),
-        "  ",
-        button(q, "debug", config.icons.debug, "Debug"),
+        button(q, "run", config.icons.run),
+        " ",
+        button(q, "submit", config.icons.submit),
+        " ",
+        button(q, "debug", config.icons.debug),
     }
 
     local extra = {}

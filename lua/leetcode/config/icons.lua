@@ -12,6 +12,7 @@ local icons = {
     debug = "\u{f188}",
     image = "\u{f02e9}",
     hide = "\u{f104}",
+    console_tabs = { testcase = "\u{f0ae}", result = "\u{f0c3}" },
     tabs = {
         description = "\u{f0219}",
         editorial = "\u{f0336}",
@@ -56,6 +57,7 @@ icons.plain = {
     debug = "◉",
     image = "▣",
     hide = "<",
+    console_tabs = { testcase = "≡", result = "✓" },
     tabs = { description = "▤", editorial = "✎", solutions = "☰", submissions = "✓" },
     add = "+",
     param = "›",
