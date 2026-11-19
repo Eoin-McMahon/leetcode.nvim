@@ -23,6 +23,12 @@ function logger.log(msg, lvl)
 
     local title = config.name
     lvl = lvl or lvls.INFO
+    if vim.g.leetcode_stealth then
+        if lvl < lvls.ERROR then
+            return
+        end
+        title = nil
+    end
     msg = normalize(msg)
 
     if lvl == lvls.DEBUG then

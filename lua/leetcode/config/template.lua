@@ -170,6 +170,12 @@ local M = {
     ---@type boolean
     image_support = false,
 
+    stealth = {
+        ---Show uncalled work-style code around the solution. Virtual lines have
+        ---no line numbers, so turn this off if the gaps give it away.
+        decoy = true, ---@type boolean
+    },
+
     ---Result polling after Run and Submit, in milliseconds. LeetCode's rate
     ---limit is unknown, so keep `fast` at 150 or above.
     poll = {

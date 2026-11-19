@@ -499,6 +499,10 @@ function cmd.layout_cycle()
     q.layout:set_preset()
 end
 
+function cmd.stealth_toggle()
+    require("leetcode-ui.stealth").toggle()
+end
+
 function cmd.tags_toggle()
     local q = require("leetcode.utils").curr_question()
     if q then
@@ -717,6 +721,7 @@ cmd.commands = {
     fold = { cmd.fold },
     timings = { cmd.timings },
     tags = { cmd.tags_toggle },
+    stealth = { cmd.stealth_toggle },
     layout = { cmd.layout_cycle },
     pane = {
         side = { cmd.pane_toggle("side") },

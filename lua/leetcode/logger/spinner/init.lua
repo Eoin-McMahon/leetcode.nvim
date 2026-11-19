@@ -128,6 +128,9 @@ function Spinner:replace()
     end
 
     vim.schedule(function()
+        if vim.g.leetcode_stealth then
+            return
+        end
         self.notif = vim.notify(msg, self.lvl, self.opts)
     end)
 end

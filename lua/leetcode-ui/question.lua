@@ -325,6 +325,15 @@ function Question:handle_mount()
 
     table.insert(_Lc_state.questions, self)
     require("leetcode.cache.draft").apply(self)
+    if vim.g.leetcode_stealth then
+        require("leetcode-ui.stealth").apply(self)
+    else
+        vim.defer_fn(function()
+            if self.bufnr and vim.api.nvim_buf_is_valid(self.bufnr) then
+                require("leetcode-ui.stealth.overlay").prepare(self)
+            end
+        end, 300)
+    end
 
     self:autocmds()
     utils.exec_hooks("question_enter", self)
