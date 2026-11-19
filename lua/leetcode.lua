@@ -83,6 +83,7 @@ end
 function leetcode.setup_cmds()
     require("leetcode.command").setup()
     require("leetcode.command").setup_mappings()
+    require("leetcode-ui.tabline").setup()
 end
 
 ---@param on_vimenter boolean

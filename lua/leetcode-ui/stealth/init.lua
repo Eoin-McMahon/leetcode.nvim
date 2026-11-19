@@ -115,7 +115,7 @@ local function override_ui()
     }
     local statusline = vim.o.statusline ~= "" and vim.o.statusline or "%<%f %h%m%r%=%-14.(%l,%c%V%) %P"
     vim.o.statusline = statusline:gsub("%%f", "%%{v:lua.require'leetcode-ui.stealth'.filename()}")
-    vim.o.tabline = "%!v:lua.require'leetcode-ui.stealth'.tabline()"
+    vim.o.tabline = require("leetcode-ui.tabline").expr
     vim.o.titlestring = "%{v:lua.require'leetcode-ui.stealth'.filename()}"
 end
 

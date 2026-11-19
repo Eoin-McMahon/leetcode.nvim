@@ -56,6 +56,12 @@ _G._leetcode_ctl = {
         end
     end,
 
+    lang = function()
+        local q = question_at_mouse()
+        if q then
+            require("leetcode.picker").language(q)
+        end
+    end,
     hide_side = function()
         local q = question_at_mouse()
         if q and q.layout then
@@ -132,8 +138,22 @@ local function button(q, name, icon)
 end
 
 ---@param q lc.ui.Question
+---Current language, clickable to open the language picker.
+---@param q lc.ui.Question
+local function language(q)
+    local lang = require("leetcode.utils").get_lang(q.lang) or {}
+    local icon = config.user.nerd_font and lang.icon and (lang.icon .. " ") or ""
+    return ("%%@v:lua._leetcode_ctl.lang@%%#leetcode_ctl_lang# %s%s%s %%X%%*"):format(
+        icon,
+        lang.lang or q.lang,
+        key_label(config.user.mappings.lang)
+    )
+end
+
 function Controls.build(q)
     local parts = {
+        language(q),
+        "  ",
         button(q, "run", config.icons.run),
         " ",
         button(q, "submit", config.icons.submit),
@@ -211,6 +231,7 @@ function Controls.highlights()
     vim.api.nvim_set_hl(0, "leetcode_ctl_tab_active", { link = "Title", default = true })
     vim.api.nvim_set_hl(0, "leetcode_ctl_tab", { link = "Comment", default = true })
     vim.api.nvim_set_hl(0, "leetcode_ctl_action", { link = "Special", default = true })
+    vim.api.nvim_set_hl(0, "leetcode_ctl_lang", { link = "Title", default = true })
     vim.api.nvim_set_hl(0, "leetcode_ctl_debug", { link = "DiagnosticWarn", default = true })
 
 end
