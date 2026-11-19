@@ -333,6 +333,7 @@ function Console.new(layout, pane, result_buf)
         testcase_buf = pane.bufnr,
         result_buf = result_buf,
         active = "testcase",
+        collapsed = config.user.splits.collapsed,
     }, Console)
 
     self.testcase = setmetatable({ console = self, testcases = {}, testcase_len = 0 }, Testcase)
@@ -341,6 +342,20 @@ function Console.new(layout, pane, result_buf)
     local id = self.question.q.frontend_id
     pcall(vim.api.nvim_buf_set_name, self.testcase_buf, id .. "/Tests")
     pcall(vim.api.nvim_buf_set_name, result_buf, id .. "/Results")
+
+    -- The one-row view shown while collapsed. Entering it expands the panel,
+    -- so a click or <C-w>j opens the tests.
+    self.collapsed_buf = vim.api.nvim_create_buf(false, true)
+    for opt, value in pairs({ buftype = "nofile", bufhidden = "hide", swapfile = false, modifiable = false }) do
+        vim.bo[self.collapsed_buf][opt] = value
+    end
+    vim.api.nvim_create_autocmd("BufEnter", {
+        buffer = self.collapsed_buf,
+        callback = vim.schedule_wrap(function()
+            self:set_collapsed(false)
+            self.pane:focus()
+        end),
+    })
 
     self.testcase:populate()
     vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI", "TextChangedP", "InsertLeave" }, {
@@ -354,12 +369,75 @@ function Console.new(layout, pane, result_buf)
     return self
 end
 
+---@return integer
+function Console:active_buf()
+    return self.active == "result" and self.result_buf or self.testcase_buf
+end
+
+---@param collapsed boolean
+function Console:set_collapsed(collapsed)
+    if self.collapsed == collapsed then
+        return
+    end
+    self.collapsed = collapsed
+    self.layout:show("console")
+    self.layout:apply()
+end
+
+---Collapse or expand; shows the panel first if it was hidden.
+function Console:toggle()
+    if not self.layout:is_visible("console") then
+        self.collapsed = false
+        return self.layout:show("console")
+    end
+    self:set_collapsed(not self.collapsed)
+end
+
+---@param horizontal boolean one row under the code, else a narrow strip
+function Console:render_collapsed(horizontal)
+    local bufnr = self.collapsed_buf
+    local ns = vim.api.nvim_create_namespace("leetcode_collapsed")
+    local icons = config.icons
+    local lines = horizontal and { "" } or { "", "", "" }
+    vim.bo[bufnr].modifiable = true
+    vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
+    vim.bo[bufnr].modifiable = false
+    vim.api.nvim_buf_clear_namespace(bufnr, ns, 0, -1)
+
+    if horizontal then
+        vim.api.nvim_buf_set_extmark(bufnr, ns, 0, 0, {
+            virt_text = {
+                { " " .. icons.console_tabs.testcase .. " " .. LABELS.testcase .. "  ", "leetcode_ctl_tab" },
+                { icons.console_tabs.result .. " " .. LABELS.result, "leetcode_ctl_tab" },
+            },
+            virt_text_pos = "overlay",
+        })
+        vim.api.nvim_buf_set_extmark(bufnr, ns, 0, 0, {
+            virt_text = { { icons.expand_up .. " ", "leetcode_ctl_key" } },
+            virt_text_pos = "right_align",
+        })
+    else
+        for row, icon in ipairs({ icons.expand_left, icons.console_tabs.testcase, icons.console_tabs.result }) do
+            vim.api.nvim_buf_set_extmark(bufnr, ns, row - 1, 0, {
+                virt_text = { { " " .. icon, row == 1 and "leetcode_ctl_key" or "leetcode_ctl_tab" } },
+                virt_text_pos = "overlay",
+            })
+        end
+    end
+end
+
 ---@param tab lc.splits.ConsoleTab
 ---@param focus? boolean
 function Console:select(tab, focus)
     self.active = tab
-    self.layout:show("console")
-    self.pane:set_buf(tab == "result" and self.result_buf or self.testcase_buf)
+    if self.collapsed then
+        self.collapsed = false
+        self.layout:show("console")
+        self.layout:apply()
+    else
+        self.layout:show("console")
+        self.pane:set_buf(self:active_buf())
+    end
     self:render_winbar()
     if tab == "result" then
         self.result:draw()
@@ -381,17 +459,17 @@ function Console:set_status(hl, title)
     self:render_winbar()
 end
 
----Tabs like the side pane (icon, active one named), then the test case
----actions and hide on the right. No key hints here: which-key lists them.
+---Both tabs named with their icons, then the test case actions, fullscreen
+---and collapse on the right. No key hints unless `key_hints` is on.
 function Console:render_winbar()
+    if self.collapsed then
+        return
+    end
     local parts = { " " }
     for i, tab in ipairs(TABS) do
         local active = tab == self.active
         local hl = active and "leetcode_ctl_tab_active" or "leetcode_ctl_tab"
-        local label = config.icons.console_tabs[tab]
-        if active then
-            label = label .. " " .. LABELS[tab]
-        end
+        local label = config.icons.console_tabs[tab] .. " " .. LABELS[tab]
         local key = config.user.key_hints and Controls.display_key(config.user.mappings[tab])
         if key then
             label = ("%s (%s)"):format(label, key)
@@ -402,10 +480,20 @@ function Console:render_winbar()
         table.insert(parts, ("%%%d@v:lua._leetcode_ctl.console_tab@%%#%s# %s %%X%%*"):format(i, hl, label))
     end
 
+    local icons = config.icons
+    local horizontal = self.layout.preset ~= "wide"
     table.insert(parts, "%=")
-    table.insert(parts, Controls.button("reset", config.icons.reset, "leetcode_ctl_action", "reset"))
-    table.insert(parts, Controls.button("add_case", config.icons.add, "leetcode_ctl_action", "add_case"))
-    table.insert(parts, Controls.button("hide_console", config.icons.hide, "leetcode_ctl_key", "console"))
+    table.insert(parts, Controls.button("reset", icons.reset, "leetcode_ctl_action", "reset"))
+    table.insert(parts, Controls.button("add_case", icons.add, "leetcode_ctl_action", "add_case"))
+    if self.pane:is_fullscreen() then
+        table.insert(parts, Controls.button("fullscreen_console", icons.restore, "leetcode_ctl_key", "fullscreen"))
+    else
+        table.insert(parts, Controls.button("fullscreen_console", icons.fullscreen, "leetcode_ctl_key", "fullscreen"))
+        table.insert(
+            parts,
+            Controls.button("toggle_console", horizontal and icons.collapse_down or icons.collapse_right, "leetcode_ctl_key", "console")
+        )
+    end
     self.pane:set_winbar(table.concat(parts, ""))
 end
 
@@ -421,9 +509,8 @@ function Console:run(submit)
 
     self:set_status(nil)
     self.result:pending(submit == true)
-    if config.user.console.open_on_runcode or self.layout:is_visible("console") then
-        self:select("result")
-    end
+    -- Running always opens the results, expanding a collapsed panel.
+    self:select("result")
 
     Runner:init(self.question):run(submit)
 end
@@ -447,15 +534,13 @@ function Console:hide()
     self.layout:hide("console")
 end
 
-function Console:toggle()
-    self.layout:toggle("console")
-end
-
 function Console:unmount() end
 
 function Console:destroy()
-    if vim.api.nvim_buf_is_valid(self.result_buf) then
-        pcall(vim.api.nvim_buf_delete, self.result_buf, { force = true })
+    for _, bufnr in ipairs({ self.result_buf, self.collapsed_buf }) do
+        if bufnr and vim.api.nvim_buf_is_valid(bufnr) then
+            pcall(vim.api.nvim_buf_delete, bufnr, { force = true })
+        end
     end
 end
 

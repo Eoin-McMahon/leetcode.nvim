@@ -187,7 +187,14 @@ function Side:render_winbar()
         table.insert(parts, ("%%%d@v:lua._leetcode_ctl.tab@%%#%s# %s %%X%%*"):format(i, hl, label))
     end
     table.insert(parts, "%=")
-    table.insert(parts, Controls.button("hide_side", config.icons.hide, "leetcode_ctl_key", "side"))
+    local pane = self.layout.panes.side
+    table.insert(
+        parts,
+        Controls.button("fullscreen_side", pane:is_fullscreen() and config.icons.restore or config.icons.fullscreen, "leetcode_ctl_key", "fullscreen")
+    )
+    if not pane:is_fullscreen() then
+        table.insert(parts, Controls.button("hide_side", config.icons.hide, "leetcode_ctl_key", "side"))
+    end
     self.layout.panes.side:set_winbar(table.concat(parts, ""))
 end
 

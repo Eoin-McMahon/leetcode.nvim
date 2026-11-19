@@ -114,6 +114,8 @@ local M = {
 
     splits = {
         preset = "website", ---@type "website"|"wide"
+        ---Start with the test panel collapsed to one row; running code expands it.
+        collapsed = true, ---@type boolean
         ---Default sizes as fractions of the tab. website: side width and test
         ---panel height. wide: side and test panel widths. Dragged sizes are
         ---kept while the question is open.

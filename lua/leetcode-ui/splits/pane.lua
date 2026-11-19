@@ -43,6 +43,60 @@ function Pane:set_buf(bufnr)
     if self:is_open() then
         ui_utils.win_set_buf(self.winid, bufnr, true)
     end
+    if self:is_fullscreen() then
+        ui_utils.win_set_buf(self.float, bufnr, true)
+    end
+end
+
+---@return boolean
+function Pane:is_fullscreen()
+    return self.float ~= nil and vim.api.nvim_win_is_valid(self.float)
+end
+
+---Show the pane in a float over the whole editor. The split layout underneath
+---is left as it is, so leaving fullscreen restores it exactly.
+---@param on_exit fun()
+function Pane:enter_fullscreen(on_exit)
+    if self:is_fullscreen() then
+        return
+    end
+    local height = vim.o.lines - vim.o.cmdheight - (vim.o.laststatus > 0 and 1 or 0)
+    if vim.o.showtabline == 2 or (vim.o.showtabline == 1 and #vim.api.nvim_list_tabpages() > 1) then
+        height = height - 1
+    end
+    self.return_win = vim.api.nvim_get_current_win()
+    self.float = vim.api.nvim_open_win(self.bufnr, true, {
+        relative = "editor",
+        row = 0,
+        col = 0,
+        width = vim.o.columns,
+        height = math.max(height - 1, 1),
+        style = "minimal",
+        zindex = 45,
+    })
+    ui_utils.win_set_opts(self.float, vim.tbl_extend("force", { wrap = true, linebreak = true }, self.win_opts))
+    if self.winbar then
+        vim.wo[self.float].winbar = self.winbar
+    end
+    vim.api.nvim_create_autocmd("WinClosed", {
+        pattern = tostring(self.float),
+        once = true,
+        callback = vim.schedule_wrap(function()
+            self.float = nil
+            on_exit()
+        end),
+    })
+end
+
+function Pane:exit_fullscreen()
+    if self:is_fullscreen() then
+        pcall(vim.api.nvim_win_close, self.float, true)
+    end
+    self.float = nil
+    local target = self:is_open() and self.winid or self.return_win
+    if target and vim.api.nvim_win_is_valid(target) then
+        vim.api.nvim_set_current_win(target)
+    end
 end
 
 ---@param parent integer window to split
@@ -87,6 +141,9 @@ function Pane:set_winbar(text)
     self.winbar = text
     if self:is_open() then
         vim.wo[self.winid].winbar = text
+    end
+    if self:is_fullscreen() then
+        vim.wo[self.float].winbar = text
     end
 end
 

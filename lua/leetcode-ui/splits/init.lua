@@ -167,7 +167,10 @@ end
 function Layout:remember_sizes()
     local sizes = self.sizes[self.preset] or {}
     for _, entry in ipairs(PRESETS[self.preset]) do
-        local size = self.panes[entry.pane]:size(entry.dir == "left" or entry.dir == "right")
+        -- A window opened collapsed is a one-row strip; its size is not the
+        -- panel's size, so it is never remembered.
+        local pane = self.panes[entry.pane]
+        local size = not pane.opened_collapsed and pane:size(entry.dir == "left" or entry.dir == "right")
         if size then
             sizes[entry.pane] = size
         end
@@ -232,7 +235,32 @@ function Layout:apply()
             if not (parent and vim.api.nvim_win_is_valid(parent)) then
                 parent = code_win
             end
-            pane:open(parent, entry.dir, self:size_for(entry, parent))
+            local collapsed = entry.pane == "console" and self.console.collapsed
+            local size = self:size_for(entry, parent)
+            if collapsed then
+                -- One row under the code, or a narrow strip beside it.
+                pane.bufnr = self.console.collapsed_buf
+                pane.winbar = ""
+                size = (entry.dir == "below" or entry.dir == "above") and 1 or 4
+            elseif entry.pane == "console" then
+                pane.bufnr = self.console:active_buf()
+            end
+            pane:open(parent, entry.dir, size)
+            pane.opened_collapsed = collapsed
+            if collapsed then
+                if entry.dir == "below" or entry.dir == "above" then
+                    vim.api.nvim_win_set_height(pane.winid, 1)
+                else
+                    vim.api.nvim_win_set_width(pane.winid, 4)
+                end
+            end
+            if entry.pane == "console" then
+                if collapsed then
+                    self.console:render_collapsed(entry.dir == "below" or entry.dir == "above")
+                else
+                    self.console:render_winbar()
+                end
+            end
             self:watch(pane)
         end
     end
@@ -299,6 +327,42 @@ function Layout:set_keymaps()
     map(console.result_buf, keys.use_testcase, function()
         console:use_testcase()
     end)
+end
+
+---Show a pane in a float over the whole editor, or leave fullscreen. Esc and
+---the restore icon leave it.
+---@param name lc.splits.PaneName
+function Layout:fullscreen(name)
+    local pane = self.panes[name]
+    if pane:is_fullscreen() then
+        return pane:exit_fullscreen()
+    end
+    if name == "console" and self.console.collapsed then
+        self.console:set_collapsed(false)
+    end
+    self:show(name)
+
+    local bufs = name == "side" and vim.tbl_values(self.side.bufs)
+        or { self.console.testcase_buf, self.console.result_buf }
+    for _, bufnr in ipairs(bufs) do
+        vim.keymap.set("n", "<Esc>", function()
+            pane:exit_fullscreen()
+        end, { buffer = bufnr, nowait = true, desc = "Leave fullscreen" })
+    end
+    pane:enter_fullscreen(function()
+        for _, bufnr in ipairs(bufs) do
+            pcall(vim.keymap.del, "n", "<Esc>", { buffer = bufnr })
+        end
+        self:refresh_bars()
+    end)
+    self:refresh_bars()
+end
+
+function Layout:refresh_bars()
+    self.side:render_winbar()
+    if not self.console.collapsed then
+        self.console:render_winbar()
+    end
 end
 
 ---Restore hints for hidden panes, shown in the code window's winbar.

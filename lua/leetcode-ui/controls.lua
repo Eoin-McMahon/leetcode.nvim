@@ -68,6 +68,24 @@ _G._leetcode_ctl = {
             q.layout:hide("side")
         end
     end,
+    toggle_console = function()
+        local q = question_at_mouse()
+        if q and q.layout then
+            q.console:toggle()
+        end
+    end,
+    fullscreen_console = function()
+        local q = question_at_mouse()
+        if q and q.layout then
+            q.layout:fullscreen("console")
+        end
+    end,
+    fullscreen_side = function()
+        local q = question_at_mouse()
+        if q and q.layout then
+            q.layout:fullscreen("side")
+        end
+    end,
     hide_console = function()
         local q = question_at_mouse()
         if q and q.layout then
