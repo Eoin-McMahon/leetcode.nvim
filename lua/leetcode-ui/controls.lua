@@ -55,18 +55,7 @@ _G._leetcode_ctl = {
             require("leetcode.debug").toggle(q)
         end
     end,
-    debug_continue = function()
-        require("leetcode.debug").step("continue")
-    end,
-    debug_over = function()
-        require("leetcode.debug").step("over")
-    end,
-    debug_into = function()
-        require("leetcode.debug").step("into")
-    end,
-    debug_out = function()
-        require("leetcode.debug").step("out")
-    end,
+
     add_case = function()
         local q = question_at_mouse()
         if q then
@@ -132,10 +121,6 @@ end
 
 ---@param q lc.ui.Question
 function Controls.build(q)
-    local debug_bar = require("leetcode.debug").winbar(q)
-    if debug_bar then
-        return debug_bar
-    end
     local parts = {
         button(q, "run", config.icons.run),
         " ",
@@ -215,8 +200,7 @@ function Controls.highlights()
     vim.api.nvim_set_hl(0, "leetcode_ctl_tab", { link = "Comment", default = true })
     vim.api.nvim_set_hl(0, "leetcode_ctl_action", { link = "Special", default = true })
     vim.api.nvim_set_hl(0, "leetcode_ctl_debug", { link = "DiagnosticWarn", default = true })
-    vim.api.nvim_set_hl(0, "leetcode_debug_line", { link = "Visual", default = true })
-    vim.api.nvim_set_hl(0, "leetcode_debug_label", { link = "DiagnosticWarn", default = true })
+
 end
 
 return Controls

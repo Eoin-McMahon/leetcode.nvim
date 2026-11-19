@@ -86,8 +86,7 @@ local M = {
     ---Global keymaps, created by the plugin when it starts. Every key hint in
     ---the UI is read from here, so remapping a key here changes its hint too.
     ---`false` or nil leaves an action unmapped. Actions: menu, run, submit,
-    ---debug, debug_continue, debug_over, debug_into, debug_out,
-    ---debug_breakpoint, side, console, testcase, result, reset, add_case,
+    ---debug, side, console, testcase, result, reset, add_case,
     ---layout, tags, stealth, info, list, daily, random, lang, last_submit,
     ---reset_code, yank, exit.
     ---@type table<string, string|false>

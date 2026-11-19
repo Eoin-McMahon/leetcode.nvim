@@ -526,13 +526,6 @@ function cmd.debug()
     end
 end
 
----@param action "continue"|"over"|"into"|"out"|"breakpoint"
-function cmd.debug_step(action)
-    return function()
-        require("leetcode.debug").step(action)
-    end
-end
-
 function cmd.stealth_toggle()
     require("leetcode-ui.stealth").toggle()
 end
@@ -731,12 +724,7 @@ cmd.mapping_actions = {
     menu = { "", "Open" },
     run = { "run", "Run" },
     submit = { "submit", "Submit" },
-    debug = { "debug", "Toggle debugging" },
-    debug_continue = { "debug continue", "Debug: continue" },
-    debug_over = { "debug over", "Debug: step over" },
-    debug_into = { "debug into", "Debug: step into" },
-    debug_out = { "debug out", "Debug: step out" },
-    debug_breakpoint = { "debug breakpoint", "Debug: toggle breakpoint" },
+    debug = { "debug", "Open in debugger" },
     side = { "pane side", "Toggle side panel" },
     console = { "pane console", "Toggle console" },
     testcase = { "pane testcase", "Tests tab" },
@@ -802,14 +790,7 @@ cmd.commands = {
     timings = { cmd.timings },
     tags = { cmd.tags_toggle },
     stealth = { cmd.stealth_toggle },
-    debug = {
-        cmd.debug,
-        continue = { cmd.debug_step("continue") },
-        over = { cmd.debug_step("over") },
-        into = { cmd.debug_step("into") },
-        out = { cmd.debug_step("out") },
-        breakpoint = { cmd.debug_step("breakpoint") },
-    },
+    debug = { cmd.debug },
     layout = { cmd.layout_cycle },
     pane = {
         side = { cmd.pane_toggle("side") },

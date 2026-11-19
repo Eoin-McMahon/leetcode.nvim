@@ -1,10 +1,12 @@
 local config = require("leetcode.config")
 local log = require("leetcode.logger")
 
----Local debugging with nvim-dap. Runs the solution on this machine with the
----testcase pane's inputs, so it needs no Premium and no LeetCode request. The
----plugin registers its own debugpy adapter; the user's dap config is not used
----or changed.
+---Hand a question over to nvim-dap. The code is copied to a debug file in its
+---own tab and run locally on the testcase pane's inputs, so it needs no Premium
+---and sends nothing to LeetCode. From then on nvim-dap and dap-ui own the keys,
+---signs and UI; when the session ends the tab closes and the question tab is
+---back. The plugin registers its own debugpy adapter and leaves the user's dap
+---config alone.
 local Debug = {}
 
 local ADAPTER = "leetcode_python"
@@ -89,15 +91,17 @@ end
 
 ---Line of the solution method's first statement, for a default breakpoint.
 ---@param q lc.ui.Question
+---@param bufnr integer
 ---@return integer?
-local function entry_line(q)
+local function entry_line(q, bufnr)
     local meta = q.q.meta_data
     local name = meta.systemdesign and "__init__" or meta.name
-    local lines = vim.api.nvim_buf_get_lines(q.bufnr, 0, -1, false)
+    local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
     for i, line in ipairs(lines) do
         if line:match("def%s+" .. vim.pesc(name) .. "%s*%(") then
             for j = i + 1, #lines do
-                if vim.trim(lines[j]) ~= "" and not vim.trim(lines[j]):match("^#") then
+                local text = vim.trim(lines[j])
+                if text ~= "" and not text:match("^#") then
                     return j
                 end
             end
@@ -105,169 +109,68 @@ local function entry_line(q)
     end
 end
 
----@param q lc.ui.Question
+---@param bufnr integer
 ---@return boolean
-local function has_breakpoints(q)
-    local ok, breakpoints = pcall(require, "dap.breakpoints")
-    if not ok then
-        return false
-    end
-    local by_buf = breakpoints.get(q.bufnr)
-    return by_buf[q.bufnr] ~= nil and #by_buf[q.bufnr] > 0
+local function has_breakpoints(bufnr)
+    local by_buf = require("dap.breakpoints").get(bufnr)
+    return by_buf[bufnr] ~= nil and #by_buf[bufnr] > 0
 end
 
-local NS = vim.api.nvim_create_namespace("leetcode_debug")
-
+---Write the question's current code (saved or not) to a debug-only file.
 ---@param q lc.ui.Question
-local function clear_line(q)
-    if vim.api.nvim_buf_is_valid(q.bufnr) then
-        vim.api.nvim_buf_clear_namespace(q.bufnr, NS, 0, -1)
-    end
+---@return string
+local function debug_copy(q)
+    local dir = vim.fn.stdpath("cache") .. "/leetcode/debug"
+    vim.fn.mkdir(dir, "p")
+    local path = ("%s/%s_%s.py"):format(dir, q.q.frontend_id, q.q.title_slug:gsub("-", "_"))
+    vim.fn.writefile(vim.api.nvim_buf_get_lines(q.bufnr, 0, -1, false), path)
+    return path
 end
 
 ---@param q lc.ui.Question
----@param line integer
-local function mark_line(q, line)
-    clear_line(q)
-    local d = q.debugging
-    local label = d and d.case and ("%s Case %d/%d"):format(config.icons.debug_here, d.case, d.total) or nil
-    pcall(vim.api.nvim_buf_set_extmark, q.bufnr, NS, line - 1, 0, {
-        line_hl_group = "leetcode_debug_line",
-        virt_text = label and { { "  " .. label, "leetcode_debug_label" } } or nil,
-        virt_text_pos = "eol",
-    })
-    if q.winid and vim.api.nvim_win_is_valid(q.winid) and vim.api.nvim_win_get_buf(q.winid) == q.bufnr then
-        pcall(vim.api.nvim_win_set_cursor, q.winid, { line, 0 })
-    end
-end
-
----Make the session visible in the question tab: panes out of the way, a sign
----column for breakpoints, the stopped line highlighted with the case number,
----and the winbar switched to the debug bar.
----@param dap table
----@param q lc.ui.Question
----@param total integer
-local function session_ui(dap, q, total)
-    local controls = require("leetcode-ui.controls")
-    local restore_panes
-    local restore_signcolumn
-
-    local function finish()
-        if not q.debugging then
-            return
-        end
-        q.debugging = nil
-        vim.schedule(function()
-            clear_line(q)
-            if restore_signcolumn and q.winid and vim.api.nvim_win_is_valid(q.winid) then
-                vim.wo[q.winid].signcolumn = restore_signcolumn
-            end
-            if q.layout and restore_panes then
-                q.layout:show(restore_panes)
-            end
-            controls.render(q)
-        end)
-    end
-
-    dap.listeners.after.event_initialized.leetcode = function()
-        q.debugging = { total = total }
-        if q.layout then
-            restore_panes = {}
-            for name, pane in pairs(q.layout.panes) do
-                if pane.visible then
-                    table.insert(restore_panes, name)
-                end
-            end
-            q.layout:hide({ "side", "console" })
-        end
-        if q.winid and vim.api.nvim_win_is_valid(q.winid) then
-            restore_signcolumn = vim.wo[q.winid].signcolumn
-            vim.wo[q.winid].signcolumn = "yes"
-        end
-        controls.render(q)
-    end
-    dap.listeners.after.event_output.leetcode = function(_, body)
-        local case = body.category == "stdout" and body.output:match("^Case (%d+)")
-        if case and q.debugging then
-            q.debugging.case = tonumber(case)
-            vim.schedule(function()
-                controls.render(q)
-            end)
-        end
-    end
-    dap.listeners.after.event_stopped.leetcode = function(session)
-        vim.defer_fn(function()
-            local frame = session.current_frame
-            if not (q.debugging and frame and frame.source and frame.source.path) then
-                return
-            end
-            if vim.fs.normalize(frame.source.path) == vim.fs.normalize(q.file:absolute()) then
-                mark_line(q, frame.line)
-            end
-            controls.render(q)
-        end, 50)
-    end
-    dap.listeners.after.event_continued.leetcode = function()
-        vim.schedule(function()
-            clear_line(q)
-        end)
-    end
-    dap.listeners.after.event_terminated.leetcode = finish
-    dap.listeners.after.event_exited.leetcode = finish
-    dap.listeners.after.disconnect.leetcode = finish
-end
-
----The code winbar while debugging: case and step controls.
----@param q lc.ui.Question
----@return string?
-function Debug.winbar(q)
-    local d = q.debugging
+local function back_to_question(q)
+    local d = q.debug_session
+    q.debug_session = nil
     if not d then
         return
     end
-    local controls = require("leetcode-ui.controls")
-    local case = d.case and ("Case %d/%d"):format(d.case, d.total) or "starting"
-    local parts = {
-        ("%%#leetcode_debug_label# %s DEBUG  %s %%*"):format(config.icons.debug, case),
-        controls.button("debug_continue", config.icons.debug_continue, "leetcode_ctl_run", "debug_continue"),
-        controls.button("debug_over", config.icons.debug_over, "leetcode_ctl_action", "debug_over"),
-        controls.button("debug_into", config.icons.debug_into, "leetcode_ctl_action", "debug_into"),
-        controls.button("debug_out", config.icons.debug_out, "leetcode_ctl_action", "debug_out"),
-        "%=",
-        controls.button("debug", config.icons.debug_stop, "leetcode_ctl_debug", "debug"),
-    }
-    return table.concat(parts, " ")
+    vim.schedule(function()
+        if d.tab and vim.api.nvim_tabpage_is_valid(d.tab) and #vim.api.nvim_list_tabpages() > 1 then
+            pcall(vim.cmd.tabclose, vim.api.nvim_tabpage_get_number(d.tab))
+        end
+        -- Deleting the buffer clears its breakpoints, which nvim-dap sends to the
+        -- adapter. Wait until the session is fully gone so nothing is sent to a
+        -- dead adapter.
+        local function wipe(tries)
+            local ok, dap = pcall(require, "dap")
+            if ok and dap.session() and tries > 0 then
+                return vim.defer_fn(function()
+                    wipe(tries - 1)
+                end, 200)
+            end
+            if d.bufnr and vim.api.nvim_buf_is_valid(d.bufnr) then
+                pcall(vim.api.nvim_buf_delete, d.bufnr, { force = true })
+            end
+        end
+        vim.defer_fn(function()
+            wipe(10)
+        end, 200)
+        if q.winid and vim.api.nvim_win_is_valid(q.winid) then
+            vim.api.nvim_set_current_tabpage(vim.api.nvim_win_get_tabpage(q.winid))
+            vim.api.nvim_set_current_win(q.winid)
+        end
+    end)
 end
 
----Step actions for keymaps and winbar clicks.
----@param action "continue"|"over"|"into"|"out"|"breakpoint"
-function Debug.step(action)
-    local ok, dap = pcall(require, "dap")
-    if not ok then
-        return log.error("Debugging needs nvim-dap (mfussenegger/nvim-dap)")
-    end
-    if action == "breakpoint" then
-        return dap.toggle_breakpoint()
-    end
-    if not dap.session() then
-        return log.warn("Not debugging. Start with the debug key")
-    end
-    ({ continue = dap.continue, over = dap.step_over, into = dap.step_into, out = dap.step_out })[action]()
-end
-
----Start debugging, or stop the running session.
+---Open the question in the debugger, or stop the session if one is running.
 ---@param q lc.ui.Question
 function Debug.toggle(q)
-    if q.debugging then
+    if q.debug_session then
         local ok, dap = pcall(require, "dap")
         if ok and dap.session() then
             dap.terminate()
         end
-        local ui_ok, dapui = pcall(require, "dapui")
-        if ui_ok then
-            pcall(dapui.close)
-        end
-        return
+        return back_to_question(q)
     end
     Debug.start(q)
 end
@@ -285,37 +188,47 @@ function Debug.start(q)
     if not harness then
         return log.error("Debug harness missing from the plugin install")
     end
-    if vim.bo[q.bufnr].modified then
-        vim.api.nvim_buf_call(q.bufnr, function()
-            vim.cmd("silent write")
-        end)
-    end
 
+    local file = debug_copy(q)
     local spec = vim.fn.tempname() .. ".json"
-    local all_cases = cases(q)
-    vim.fn.writefile({
-        vim.json.encode({
-            solution = q.file:absolute(),
-            meta = q.q.meta_data,
-            cases = all_cases,
-        }),
-    }, spec)
+    vim.fn.writefile({ vim.json.encode({ solution = file, meta = q.q.meta_data, cases = cases(q) }) }, spec)
 
-    if not has_breakpoints(q) then
-        local line = entry_line(q)
+    vim.cmd("tabnew " .. vim.fn.fnameescape(file))
+    local d = { tab = vim.api.nvim_get_current_tabpage(), bufnr = vim.api.nvim_get_current_buf() }
+    q.debug_session = d
+
+    if not has_breakpoints(d.bufnr) then
+        local line = entry_line(q, d.bufnr)
         if line then
-            require("dap.breakpoints").set({}, q.bufnr, line)
-            log.info(("No breakpoints set, stopping at line %d"):format(line))
+            require("dap.breakpoints").set({}, d.bufnr, line)
+            pcall(vim.api.nvim_win_set_cursor, 0, { line, 0 })
         end
     end
+
+    -- Closing the debug tab ends the session; the session ending closes the tab.
+    vim.api.nvim_create_autocmd("BufWinLeave", {
+        buffer = d.bufnr,
+        once = true,
+        callback = function()
+            if q.debug_session == d and dap.session() then
+                dap.terminate()
+            end
+        end,
+    })
+    local function done()
+        if q.debug_session == d then
+            back_to_question(q)
+        end
+    end
+    dap.listeners.after.event_terminated.leetcode = done
+    dap.listeners.after.event_exited.leetcode = done
+    dap.listeners.after.disconnect.leetcode = done
 
     dap.adapters[ADAPTER] = {
         type = "executable",
         command = python,
         args = { "-m", "debugpy.adapter" },
     }
-    session_ui(dap, q, #all_cases)
-
     dap.run({
         type = ADAPTER,
         request = "launch",
@@ -324,7 +237,7 @@ function Debug.start(q)
         args = { spec },
         console = "internalConsole",
         justMyCode = true,
-        cwd = vim.fs.dirname(q.file:absolute()),
+        cwd = vim.fs.dirname(file),
         pythonPath = python,
     })
 end
