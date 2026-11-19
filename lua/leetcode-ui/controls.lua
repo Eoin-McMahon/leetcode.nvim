@@ -74,6 +74,12 @@ _G._leetcode_ctl = {
             q.console.testcase:add_custom()
         end
     end,
+    fullscreen_code = function()
+        local q = question_at_mouse() or require("leetcode.utils").curr_question()
+        if q then
+            Controls.fullscreen_code(q)
+        end
+    end,
     toggle_console = function()
         local q = question_at_mouse()
         if q and q.layout then
@@ -195,7 +201,10 @@ function Controls.build(q)
         button(q, "debug", config.icons.debug),
     }
 
-    local extra = {}
+    local full = q.code_float and vim.api.nvim_win_is_valid(q.code_float)
+    local extra = {
+        Controls.button("fullscreen_code", full and config.icons.restore or config.icons.fullscreen, "leetcode_ctl_key", "fullscreen"),
+    }
     for _, segment in ipairs(Controls.segments) do
         local text = segment(q)
         if text and text ~= "" then
@@ -219,11 +228,11 @@ function Controls.render(q)
     if not (q.winid and vim.api.nvim_win_is_valid(q.winid)) then
         return
     end
-    if q.stealth then
-        vim.wo[q.winid].winbar = ""
-        return
+    local bar = q.stealth and "" or Controls.build(q)
+    vim.wo[q.winid].winbar = bar
+    if q.code_float and vim.api.nvim_win_is_valid(q.code_float) then
+        vim.wo[q.code_float].winbar = bar
     end
-    vim.wo[q.winid].winbar = Controls.build(q)
 end
 
 ---@param q lc.ui.Question
@@ -283,6 +292,48 @@ end
 local function link(name, snacks, fallback)
     local exists = next(vim.api.nvim_get_hl(0, { name = snacks })) ~= nil
     vim.api.nvim_set_hl(0, name, { link = exists and snacks or fallback, default = true })
+end
+
+---Show the code in a full-size float over the layout, or leave it. Esc in
+---normal mode or the restore icon leaves.
+---@param q lc.ui.Question
+function Controls.fullscreen_code(q)
+    if q.code_float and vim.api.nvim_win_is_valid(q.code_float) then
+        pcall(vim.api.nvim_win_close, q.code_float, true)
+        return
+    end
+    local height = vim.o.lines - vim.o.cmdheight - (vim.o.laststatus > 0 and 1 or 0)
+    if vim.o.showtabline == 2 or (vim.o.showtabline == 1 and #vim.api.nvim_list_tabpages() > 1) then
+        height = height - 1
+    end
+    local cursor = vim.api.nvim_win_get_cursor(q.winid)
+    q.code_float = vim.api.nvim_open_win(q.bufnr, true, {
+        relative = "editor",
+        row = 0,
+        col = 0,
+        width = vim.o.columns,
+        height = math.max(height - 1, 1),
+        zindex = 45,
+    })
+    pcall(vim.api.nvim_win_set_cursor, q.code_float, cursor)
+    local float = q.code_float
+    vim.keymap.set("n", "<Esc>", function()
+        Controls.fullscreen_code(q)
+    end, { buffer = q.bufnr, nowait = true, desc = "Leave fullscreen" })
+    vim.api.nvim_create_autocmd("WinClosed", {
+        pattern = tostring(float),
+        once = true,
+        callback = vim.schedule_wrap(function()
+            pcall(vim.keymap.del, "n", "<Esc>", { buffer = q.bufnr })
+            q.code_float = nil
+            if vim.api.nvim_win_is_valid(q.winid) then
+                pcall(vim.api.nvim_win_set_cursor, q.winid, vim.api.nvim_win_get_cursor(0))
+                vim.api.nvim_set_current_win(q.winid)
+            end
+            Controls.render(q)
+        end),
+    })
+    Controls.render(q)
 end
 
 function Controls.highlights()

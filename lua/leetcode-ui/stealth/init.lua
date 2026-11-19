@@ -85,6 +85,8 @@ function Stealth.apply(q)
 
     Controls.render(q)
     Overlay.attach(q)
+    -- q in normal mode leaves stealth.
+    vim.keymap.set("n", "q", Stealth.disable, { buffer = q.bufnr, nowait = true, desc = "Leave stealth" })
 end
 
 ---@param q lc.ui.Question
@@ -94,6 +96,7 @@ function Stealth.restore(q)
     end
     q.stealth = false
     Overlay.detach(q)
+    pcall(vim.keymap.del, "n", "q", { buffer = q.bufnr })
 
     if q.layout and q.stealth_panes then
         local show = {}
