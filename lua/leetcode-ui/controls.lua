@@ -109,9 +109,11 @@ function Controls.display_key(key)
     return (out:gsub("%%", "%%%%"))
 end
 
+---Key hints are off by default: which-key lists the keys, and the bars stay
+---quiet, like dap-ui's controls. `key_hints = true` shows them.
 ---@param key? string
 local function key_label(key)
-    local shown = Controls.display_key(key)
+    local shown = config.user.key_hints and Controls.display_key(key)
     if not shown then
         return ""
     end
@@ -123,8 +125,15 @@ end
 ---@param icon string
 ---@param hl string
 ---@param key_name string `mappings` entry
-function Controls.button(fn, icon, hl, key_name)
-    return ("%%@v:lua._leetcode_ctl.%s@%%#%s# %s%s %%X%%*"):format(fn, hl, icon, key_label(config.user.mappings[key_name]))
+---@param label? string word after the icon
+function Controls.button(fn, icon, hl, key_name, label)
+    return ("%%@v:lua._leetcode_ctl.%s@%%#%s# %s%s%s %%X%%*"):format(
+        fn,
+        hl,
+        icon,
+        label and (" " .. label) or "",
+        key_label(config.user.mappings[key_name])
+    )
 end
 
 ---@param q lc.ui.Question
@@ -134,7 +143,8 @@ local function button(q, name, icon)
     local s = state[q]
     local busy = s and s.action == name
     local hl = ({ run = "leetcode_ctl_run", submit = "leetcode_ctl_submit" })[name] or "leetcode_ctl_debug"
-    return Controls.button(name, busy and SPINNER[s.frame] or icon, hl, name)
+    local labels = { run = "Run", submit = "Submit", debug = "Debug" }
+    return Controls.button(name, busy and SPINNER[s.frame] or icon, hl, name, labels[name])
 end
 
 ---@param q lc.ui.Question

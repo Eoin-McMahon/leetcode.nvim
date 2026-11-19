@@ -92,6 +92,11 @@ local M = {
     ---@type table<string, string|false>
     mappings = {},
 
+    ---Show key hints next to bar buttons. Off by default; which-key lists them.
+    ---Side panel tab letters are always shown.
+    ---@type boolean
+    key_hints = false,
+
     ---How a space leader is shown in key hints. nil uses the Nerd space icon
     ---(`󱁐 lh`) with `nerd_font`, else "SPC".
     ---@type string?
