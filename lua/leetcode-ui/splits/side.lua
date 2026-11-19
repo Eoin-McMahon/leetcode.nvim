@@ -119,7 +119,7 @@ function Side:buffer(tab)
         bufhidden = "hide",
         swapfile = false,
         modifiable = false,
-        filetype = "markdown",
+        filetype = config.name,
     }) do
         vim.bo[bufnr][opt] = value
     end
@@ -165,6 +165,69 @@ function Side:set_lines(tab, lines, marks)
     if self.active == tab and self.layout.panes.side:is_open() then
         pcall(vim.api.nvim_win_set_cursor, self.layout.panes.side.winid, { 1, 0 })
     end
+end
+
+---Show article markdown (editorial, a community solution) in a tab, drawn
+---like the description. Kept so a resize can draw it again.
+---@param tab lc.splits.Tab
+---@param md string[]
+---@param subtitle? string
+function Side:show_article(tab, md, subtitle)
+    self.articles = self.articles or {}
+    self.articles[tab] = { md = md, subtitle = subtitle }
+    self:draw_article(tab)
+end
+
+---Show an article whose code sits in playground embeds: placeholders first,
+---then each block as its code arrives, in the problem's language.
+---@param tab lc.splits.Tab
+---@param lines string[]
+---@param uuids string[]
+---@param subtitle? string
+function Side:show_article_with_code(tab, lines, uuids, subtitle)
+    local lang = self.question.lang
+    local ft = utils.get_lang(lang).ft
+    local codes = {}
+    local token = {}
+    self.article_token = self.article_token or {}
+    self.article_token[tab] = token
+    self:show_article(tab, Markdown.fill_playgrounds(lines, codes, lang, ft), subtitle)
+    for _, uuid in ipairs(uuids) do
+        article.playground(uuid, function(list)
+            -- A newer article replaced this one while the code loaded.
+            if self.article_token[tab] ~= token then
+                return
+            end
+            codes[uuid] = list or {}
+            self:show_article(tab, Markdown.fill_playgrounds(lines, codes, lang, ft), subtitle)
+        end)
+    end
+end
+
+---@param tab lc.splits.Tab
+function Side:draw_article(tab)
+    local entry = self.articles and self.articles[tab]
+    if not entry then
+        return
+    end
+    local width = self:width()
+    local out = require("leetcode-ui.splits.article").render(entry.md, width, { subtitle = entry.subtitle })
+    local bufnr = self:buffer(tab)
+    vim.bo[bufnr].filetype = config.name
+    vim.bo[bufnr].modifiable = true
+    vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, vim.list_extend({ "" }, out.lines))
+    vim.bo[bufnr].modifiable = false
+    vim.api.nvim_buf_clear_namespace(bufnr, NS, 0, -1)
+    for _, m in ipairs(out.marks) do
+        pcall(vim.api.nvim_buf_set_extmark, bufnr, NS, m.row + 1, m.col, {
+            end_col = math.min(m.end_col, #out.lines[m.row + 1]),
+            hl_group = m.hl,
+        })
+    end
+    local line_hls = vim.tbl_map(function(l)
+        return { row = l.row + 1, hl = l.hl }
+    end, out.line_hls)
+    require("leetcode-ui.splits.card").apply(bufnr, NS, line_hls, width)
 end
 
 ---@param tab lc.splits.Tab
@@ -219,8 +282,11 @@ function Side:render_winbar()
     local bar
     for level = 1, 4 do
         bar = build(level)
-        -- Measure without the `%=` spacer, which stretches to maxwidth.
-        local ok, res = pcall(vim.api.nvim_eval_statusline, (bar:gsub("%%=", "")), { maxwidth = 1000 })
+        -- Width of the visible text, with the statusline codes (highlights,
+        -- click regions, the spacer) taken out. Measured in Lua rather than
+        -- with nvim_eval_statusline, which is not safe to call per redraw.
+        local visible = bar:gsub("%%%d*@[^@]*@", ""):gsub("%%#[^#]*#", ""):gsub("%%[X*=<]", ""):gsub("%%%%", "%%")
+        local ok, res = true, { width = vim.api.nvim_strwidth(visible) }
         if not ok or res.width <= available then
             break
         end
@@ -257,6 +323,12 @@ end
 function Side:rerender()
     self:render_winbar()
     self:render_description()
+    for tab in pairs(self.articles or {}) do
+        self:draw_article(tab)
+    end
+    if self.solutions and not (self.articles and self.articles.solutions) then
+        self:render_solution_list()
+    end
     if self.submissions or self.latest then
         self:render_submissions()
     end
@@ -526,7 +598,11 @@ function Side:render_submissions()
         text("")
         local key = config.key((config.user.mappings or {}).submit)
         local hint = key and (" with " .. require("leetcode-ui.controls").display_key(key):gsub("%%%%", "%%")) or ""
-        text("  Nothing submitted yet. Submit" .. hint .. " to see the result here.", "leetcode_desc_dim")
+        local message = "Nothing submitted yet. Submit" .. hint .. " to see the result here."
+        local wrap = require("leetcode-ui.splits.description").wrap
+        for _, l in ipairs(wrap({ { text = message } }, math.min(width, 88) - 2, "  ", "  ")) do
+            text(l.text, "leetcode_desc_dim", 2)
+        end
     end
 
     local latest_id = latest and latest.submission_id and tostring(latest.submission_id)
@@ -548,20 +624,32 @@ function Side:render_submissions()
             text("    None yet", "leetcode_desc_dim")
         end
         for _, s in ipairs(previous) do
+            -- Two short lines per submission so a narrow panel never wraps
+            -- them: the verdict with runtime and memory, then language and
+            -- time, dimmed, under the verdict.
             local ok = s.statusDisplay == "Accepted"
             local item = self.expanded[s.id]
             local mark = item and icons.collapse_down or icons.collapse_right
-            local status = ("%-22s"):format(s.statusDisplay)
-            local when = os.date("%Y-%m-%d %H:%M", tonumber(s.timestamp) or 0)
             local prefix = ("    %s "):format(mark)
-            text(("%s%s %-8s %-9s %-10s %s"):format(prefix, status, s.runtime, s.memory, s.lang, when))
+            local stats = {}
+            for _, v in ipairs({ s.runtime, s.memory }) do
+                if v and v ~= "" and v ~= "N/A" then
+                    table.insert(stats, v)
+                end
+            end
+            local stats_text = #stats > 0 and ("  ·  " .. table.concat(stats, "  ·  ")) or ""
+            text(prefix .. s.statusDisplay .. stats_text)
             table.insert(marks, { row = #lines - 1, col = 4, end_col = #prefix, hl = "leetcode_desc_dim" })
             table.insert(marks, {
                 row = #lines - 1,
                 col = #prefix,
-                end_col = #prefix + #status,
+                end_col = #prefix + #s.statusDisplay,
                 hl = ok and "leetcode_ok" or "leetcode_error",
             })
+            rows[#lines] = s
+            local when = os.date("%b %d, %Y %H:%M", tonumber(s.timestamp) or 0)
+            local detail = (" "):rep(vim.api.nvim_strwidth(prefix)) .. s.lang .. "  ·  " .. when
+            text(detail, "leetcode_desc_dim", vim.api.nvim_strwidth(prefix))
             rows[#lines] = s
             if item and item.pending then
                 text("      Loading…", "leetcode_desc_dim")
@@ -780,17 +868,7 @@ function Side:load_editorial()
         table.insert(lines, 1, "# " .. res.title)
         table.insert(lines, 2, "")
 
-        local lang = self.question.lang
-        local ft = utils.get_lang(lang).ft
-        local codes = {}
-        self:set_lines("editorial", Markdown.fill_playgrounds(lines, codes, lang, ft))
-
-        for _, uuid in ipairs(uuids) do
-            article.playground(uuid, function(list)
-                codes[uuid] = list or {}
-                self:set_lines("editorial", Markdown.fill_playgrounds(lines, codes, lang, ft))
-            end)
-        end
+        self:show_article_with_code("editorial", lines, uuids)
     end)
 end
 
@@ -826,10 +904,22 @@ function Side:load_solutions()
     end)
 end
 
+---Community solutions, two lines each: the title, then votes, views and
+---author, dimmed. Enter on either line opens it.
 function Side:render_solution_list()
+    if self.articles then
+        self.articles.solutions = nil
+    end
+    if self.article_token then
+        self.article_token.solutions = nil
+    end
     local keys = config.user.keys
-    local lines = { "", ("  %s open  %s back to list"):format(key_text(keys.confirm), key_text(keys.back)), "" }
-    local marks = { { row = 1, hl = "Comment" } }
+    local Article = require("leetcode-ui.splits.article")
+    local wrap = require("leetcode-ui.splits.description").wrap
+    local width = math.min(self:width(), 88) - 2
+    local hint = ("  %s opens one, %s comes back here"):format(key_text(keys.confirm), key_text(keys.back))
+    local lines = { "", hint, "" }
+    local marks = { { row = 1, col = 0, end_col = #hint, hl = "leetcode_desc_dim" } }
     self.solution_rows = {}
 
     for _, s in ipairs(self.solutions or {}) do
@@ -837,11 +927,23 @@ function Side:render_solution_list()
         for _, r in ipairs(s.reactions or {}) do
             votes = votes + (r.count or 0)
         end
-        local stats = ("%6s %s %6s views  "):format(short_number(votes), config.icons.upvote, short_number(s.hitCount or 0))
+        local title = Article.strip_emoji(s.title or "")
+        for _, l in ipairs(wrap({ { text = title, hl = "leetcode_desc_bold" } }, width, "  ", "  ")) do
+            table.insert(lines, l.text)
+            for _, m in ipairs(l.marks) do
+                table.insert(marks, { row = #lines - 1, col = m.col, end_col = m.end_col, hl = m.hl })
+            end
+            self.solution_rows[#lines] = s
+        end
         local author = type(s.author) == "table" and s.author.userName or "?"
-        table.insert(lines, ("%s%s · %s"):format(stats, s.title, author))
-        table.insert(marks, { row = #lines - 1, hl = "Comment", end_col = #stats })
+        local meta = ("  %s %s  ·  %s views  ·  %s"):format(config.icons.upvote, short_number(votes), short_number(s.hitCount or 0), author)
+        if vim.api.nvim_strwidth(meta) > width then
+            meta = vim.fn.strcharpart(meta, 0, width - 1) .. "…"
+        end
+        table.insert(lines, meta)
+        table.insert(marks, { row = #lines - 1, col = 0, end_col = #meta, hl = "leetcode_desc_dim" })
         self.solution_rows[#lines] = s
+        table.insert(lines, "")
     end
 
     self:set_lines("solutions", lines, marks)
@@ -863,14 +965,14 @@ function Side:open_solution()
                 ("Could not load this solution. %s back to list"):format(key_text(config.user.keys.back))
             )
         end
-        local lines = Markdown.clean(res.content)
+        local lines, uuids = Markdown.clean(res.content)
         local author = type(res.author) == "table" and res.author.userName or "?"
-        table.insert(lines, 1, "# " .. res.title)
-        table.insert(lines, 2, ("_by %s_  (%s back to list)"):format(author, key_text(config.user.keys.back)))
-        table.insert(lines, 3, "")
+        local title = require("leetcode-ui.splits.article").strip_emoji(res.title or "")
+        table.insert(lines, 1, "# " .. title)
+        table.insert(lines, 2, "")
         self.solution_rows = {}
-        self:set_lines("solutions", lines)
-        vim.bo[self:buffer("solutions")].filetype = "markdown"
+        local subtitle = ("by %s  ·  %s back to the list"):format(author, key_text(config.user.keys.back))
+        self:show_article_with_code("solutions", lines, uuids, subtitle)
     end)
 end
 

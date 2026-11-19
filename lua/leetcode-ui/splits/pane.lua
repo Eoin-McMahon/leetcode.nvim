@@ -52,6 +52,8 @@ function Pane:apply_win_opts(winid)
             cursorline = false,
             spell = false,
             list = false,
+            -- A wrap guide is for code; panels wrap their own text.
+            colorcolumn = "",
             winfixwidth = self.vertical == true,
             winfixheight = self.vertical == false,
         }, self.win_opts)

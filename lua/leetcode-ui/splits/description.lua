@@ -690,4 +690,6 @@ function Render.render(q, win_width)
     return out
 end
 
+Render.wrap = wrap
+
 return Render

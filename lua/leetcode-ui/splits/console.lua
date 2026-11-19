@@ -104,11 +104,11 @@ function Testcase:draw_extmarks()
 
     -- Each case is a card like the description's examples: a padding row
     -- above (holding "Case N", and the delete mark on your own cases) and
-    -- below, the parameter names inline, centred at the reading width.
+    -- below, the parameter names inline, at most the reading width.
     local Card = require("leetcode-ui.splits.card")
     local pane = self.console.pane
     local win_width = pane and pane:is_open() and vim.api.nvim_win_get_width(pane.winid) or 80
-    local g = Card.geometry(win_width, true)
+    local g = Card.geometry(win_width)
     local block = "leetcode_desc_block"
     local card_width = g.right - g.left
     local outside = { (" "):rep(g.left), "Normal" }
@@ -301,31 +301,27 @@ end
 ---@param out? lc.desc.Output
 function Result:write(lines, out)
     local bufnr = self.console.result_buf
-    -- Centred at the reading width when the panel is wider.
-    local Card = require("leetcode-ui.splits.card")
-    local pad = (" "):rep(Card.geometry(self:width(), true).offset)
-    lines = vim.tbl_map(function(line)
-        return line == "" and line or pad .. line
-    end, lines)
     vim.bo[bufnr].modifiable = true
     vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
     vim.bo[bufnr].modifiable = false
     vim.api.nvim_buf_clear_namespace(bufnr, RESULT_NS, 0, -1)
     for _, m in ipairs(out and out.marks or {}) do
-        pcall(vim.api.nvim_buf_set_extmark, bufnr, RESULT_NS, m.row, m.col + #pad, {
-            end_col = math.min(m.end_col + #pad, #lines[m.row + 1]),
+        pcall(vim.api.nvim_buf_set_extmark, bufnr, RESULT_NS, m.row, m.col, {
+            end_col = math.min(m.end_col, #lines[m.row + 1]),
             hl_group = m.hl,
         })
     end
-    Card.apply(bufnr, RESULT_NS, out and out.line_hls or {}, self:width(), true)
+    require("leetcode-ui.splits.card").apply(bufnr, RESULT_NS, out and out.line_hls or {}, self:width())
 end
 
----Shown until the first run.
+---Shown until the first run, centred in the panel.
 function Result:write_empty()
     local key = config.key((config.user.mappings or {}).run)
     local hint = key and (" with " .. require("leetcode-ui.controls").display_key(key):gsub("%%%%", "%%")) or ""
-    local text = ("  No results yet. Run the tests%s."):format(hint)
-    self:write({ "", text }, { marks = { { row = 1, col = 2, end_col = #text, hl = "leetcode_desc_dim" } }, line_hls = {} })
+    local message = ("No results yet. Run the tests%s."):format(hint)
+    local pad = (" "):rep(math.max(math.floor((self:width() - vim.api.nvim_strwidth(message)) / 2), 2))
+    local text = pad .. message
+    self:write({ "", text }, { marks = { { row = 1, col = #pad, end_col = #text, hl = "leetcode_desc_dim" } }, line_hls = {} })
 end
 
 function Result:draw()
@@ -336,7 +332,7 @@ function Result:draw()
     local testcases = self.console.testcase:by_id(item.submission_id)
     local md = self.console.question.q.meta_data
     local params = type(md) == "table" and md.params or {}
-    local out, count = require("leetcode-ui.splits.result").render(item, testcases, params, self.case_idx, require("leetcode-ui.splits.card").geometry(self:width(), true).width)
+    local out, count = require("leetcode-ui.splits.result").render(item, testcases, params, self.case_idx, require("leetcode-ui.splits.card").geometry(self:width()).width)
     self:write(out.lines, out)
 
     local bufnr = self.console.result_buf

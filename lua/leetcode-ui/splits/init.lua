@@ -284,7 +284,7 @@ function Layout:apply()
         vim.api.nvim_set_current_win(code_win)
     end
 
-    -- The test cards and results are centred, so they follow the new width.
+    -- The test cards and results follow the new width.
     if self.console.pane:is_open() and not self.console.collapsed then
         self.console.testcase:draw_extmarks()
         if self.console.active == "result" then
@@ -401,7 +401,7 @@ function Layout:refresh_bars()
     self.side:render_winbar()
     if not self.console.collapsed then
         self.console:render_winbar()
-        -- Cards are centred, so they follow the panel's width.
+        -- Cards and the empty message follow the panel's width.
         self.console.testcase:draw_extmarks()
         if self.console.active == "result" then
             self.console.result:draw()
