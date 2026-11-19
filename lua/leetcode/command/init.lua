@@ -513,6 +513,20 @@ function cmd.testcase_reset()
     end
 end
 
+function cmd.testcase_new()
+    local q = require("leetcode.utils").curr_question()
+    if q and q.layout then
+        q.console.testcase:add_custom()
+    end
+end
+
+function cmd.testcase_delete()
+    local q = require("leetcode.utils").curr_question()
+    if q and q.layout then
+        q.console.testcase:delete_case(vim.api.nvim_win_get_cursor(0)[1])
+    end
+end
+
 function cmd.testcase_add_failed()
     local q = require("leetcode.utils").curr_question()
     if q then
@@ -743,6 +757,8 @@ cmd.mapping_actions = {
     result = { "pane result", "Results tab" },
     reset = { "testcase reset", "Reset test cases" },
     add_case = { "testcase add", "Add failed case" },
+    new_case = { "testcase new", "Write a test case" },
+    delete_case = { "testcase delete", "Delete test case" },
     layout = { "layout", "Switch layout" },
     tags = { "tags", "Toggle tags" },
     stealth = { "stealth", "Toggle stealth" },
@@ -821,6 +837,8 @@ cmd.commands = {
     testcase = {
         reset = { cmd.testcase_reset },
         add = { cmd.testcase_add_failed },
+        new = { cmd.testcase_new },
+        delete = { cmd.testcase_delete },
     },
     -- session = {
     --     change = {

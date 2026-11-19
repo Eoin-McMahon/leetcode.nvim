@@ -177,8 +177,8 @@ local M = {
         focus_testcases = "H", ---@type string
         focus_result = "L", ---@type string
 
-        tab_next = "]t", ---@type string|string[] next side pane tab
-        tab_prev = "[t", ---@type string|string[] previous side pane tab
+        tab_next = { "<Tab>", "]t" }, ---@type string|string[] next tab in the side and test panels
+        tab_prev = { "<S-Tab>", "[t" }, ---@type string|string[] previous tab in the side and test panels
         back = "<BS>", ---@type string|string[] back from an opened solution
         ---Side panel tab keys, active in the panel's read-only buffers.
         side_tabs = { description = "d", editorial = "e", solutions = "s", submissions = "u" },

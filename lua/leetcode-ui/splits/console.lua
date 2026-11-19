@@ -7,6 +7,13 @@ local t = require("leetcode.translator")
 
 local EXTMARK_NS = vim.api.nvim_create_namespace("leetcode_extmarks")
 
+---How values of structured types are written, shown on custom cases.
+local TYPE_HINTS = {
+    ListNode = "linked list: values in order",
+    ["ListNode[]"] = "lists: each one's values in order",
+    TreeNode = "tree: level order, null for gaps",
+}
+
 ---@alias lc.splits.ConsoleTab "testcase"|"result"
 
 ---Testcase buffer for the splits layout. Mirrors `popup/console/testcase.lua`
@@ -95,17 +102,30 @@ function Testcase:draw_extmarks()
         width = math.max(width, #p.name)
     end
 
+    local examples = #(self.console.question.q.testcase_list or {})
     local j, case, invalid = 1, 0, false
     for i, line in ipairs(lines) do
         if lines[i - 1] == "" and line == "" then
             invalid = true
         end
         if line ~= "" then
+            local custom = case + (j == 1 and 1 or 0) > examples
             if j == 1 then
                 case = case + 1
+                local label = { { ("Case %d"):format(case), "leetcode_desc_dim" } }
+                if custom then
+                    table.insert(label, { "  " .. config.icons.hide, "leetcode_error" })
+                end
                 vim.api.nvim_buf_set_extmark(bufnr, EXTMARK_NS, i - 1, 0, {
-                    virt_text = { { ("Case %d"):format(case), "leetcode_desc_dim" } },
+                    virt_text = label,
                     virt_text_pos = "right_align",
+                })
+            end
+            local hint = custom and params[j] and TYPE_HINTS[params[j].type]
+            if hint then
+                vim.api.nvim_buf_set_extmark(bufnr, EXTMARK_NS, i - 1, 0, {
+                    virt_text = { { "  " .. hint, "leetcode_desc_dim" } },
+                    virt_text_pos = "eol",
                 })
             end
             local param = params[j]
@@ -126,21 +146,71 @@ function Testcase:draw_extmarks()
         end
     end
 
-    -- Make it obvious the buffer is editable and how a case is laid out.
-    local names = table.concat(self:param_names(), ", ")
+    -- Make it obvious the buffer is editable and how to add a case.
     vim.api.nvim_buf_set_extmark(bufnr, EXTMARK_NS, math.max(#lines - 1, 0), 0, {
         virt_lines = {
             { { "" } },
             {
                 {
-                    ("  Add your own case: a blank line, then one line each for %s"):format(
-                        names ~= "" and names or "the inputs"
+                    ("  %s writes a new case from Case 1. Edit any value in place; %s on a case of yours deletes it"):format(
+                        config.icons.write,
+                        config.icons.hide
                     ),
                     "leetcode_desc_dim",
                 },
             },
         },
     })
+end
+
+---Rows of each case in the buffer, in order.
+---@return { first: integer, last: integer }[] 1-based rows
+function Testcase:case_rows()
+    local rows, current = {}, nil
+    for i, line in ipairs(vim.api.nvim_buf_get_lines(self:bufnr(), 0, -1, false)) do
+        if line ~= "" then
+            if not current then
+                current = { first = i, last = i }
+                table.insert(rows, current)
+            else
+                current.last = i
+            end
+        else
+            current = nil
+        end
+    end
+    return rows
+end
+
+---Append a new case pre-filled with the first example, so its format is
+---valid from the start (linked lists and trees as value lists), and put the
+---cursor on its first value.
+function Testcase:add_custom()
+    local first = (self.console.question.q.testcase_list or {})[1] or ""
+    self.console:select("testcase", true)
+    self:append(first)
+    local rows = self:case_rows()
+    local last = rows[#rows]
+    if last and self.console.pane:is_open() then
+        pcall(vim.api.nvim_win_set_cursor, self.console.pane.winid, { last.first, 0 })
+    end
+end
+
+---Delete the custom case that contains a row. Example cases stay.
+---@param row integer 1-based
+function Testcase:delete_case(row)
+    local examples = #(self.console.question.q.testcase_list or {})
+    for idx, r in ipairs(self:case_rows()) do
+        if row >= r.first and row <= r.last then
+            if idx <= examples then
+                return log.warn("Example cases cannot be deleted. Reset restores them")
+            end
+            local bufnr = self:bufnr()
+            vim.api.nvim_buf_set_lines(bufnr, r.first - 2, r.last, false, {})
+            self:draw_extmarks()
+            return
+        end
+    end
 end
 
 function Testcase:reset()
@@ -374,6 +444,19 @@ function Console.new(layout, pane, result_buf)
     })
 
     self.testcase:populate()
+
+    -- A click on a custom case's X deletes it; other clicks behave as usual.
+    vim.keymap.set("n", "<LeftMouse>", function()
+        local m = vim.fn.getmousepos()
+        local pane = self.pane
+        if pane:is_open() and m.winid == pane.winid and m.line > 0 then
+            if m.wincol >= vim.api.nvim_win_get_width(pane.winid) - 2 then
+                return self.testcase:delete_case(m.line)
+            end
+        end
+        vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<LeftMouse>", true, false, true), "n", false)
+    end, { buffer = self.testcase_buf })
+
     vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI", "TextChangedP", "InsertLeave" }, {
         buffer = self.testcase_buf,
         callback = function()
@@ -500,7 +583,7 @@ function Console:render_winbar()
     local horizontal = self.layout.preset ~= "wide"
     table.insert(parts, "%=")
     table.insert(parts, Controls.button("reset", icons.reset, "leetcode_ctl_action", "reset"))
-    table.insert(parts, Controls.button("add_case", icons.add, "leetcode_ctl_action", "add_case"))
+    table.insert(parts, Controls.button("new_case", icons.write, "leetcode_ctl_action", "new_case"))
     if self.pane:is_fullscreen() then
         table.insert(parts, Controls.button("fullscreen_console", icons.restore, "leetcode_ctl_key", "fullscreen"))
     else
