@@ -253,9 +253,10 @@ function Result:show_error(err)
         })
     end
     self.item = nil
-    self.console:set_status("leetcode_error", "Request failed")
-    local lines = { "", "  Request failed", "" }
-    local marks = { { row = 1, col = 2, end_col = 16, hl = "leetcode_result_err" } }
+    local title = err.title or "Request failed"
+    self.console:set_status("leetcode_error", title)
+    local lines = { "", "  " .. title, "" }
+    local marks = { { row = 1, col = 2, end_col = 2 + #title, hl = "leetcode_result_err" } }
     local line_hls = {}
     local msg = tostring(err.msg or "Something went wrong")
     table.insert(lines, "  ")

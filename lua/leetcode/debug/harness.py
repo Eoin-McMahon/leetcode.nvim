@@ -132,7 +132,12 @@ def main() -> None:
 
     solution = Path(spec["solution"])
     namespace = {"__name__": "solution", "ListNode": ListNode, "TreeNode": TreeNode}
-    exec(compile(solution.read_text(encoding="utf-8"), str(solution), "exec"), namespace)
+    try:
+        exec(compile(solution.read_text(encoding="utf-8"), str(solution), "exec"), namespace)
+    except SyntaxError as error:
+        # Report it the way an editor would, then fail so the plugin shows it.
+        print(f"{type(error).__name__}: {error.msg} (line {error.lineno})", file=sys.stderr, flush=True)
+        sys.exit(1)
 
     meta = spec["meta"]
     run = _run_design if meta.get("systemdesign") else _run_function

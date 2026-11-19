@@ -216,9 +216,34 @@ function Debug.start(q, only_cases)
             end
         end,
     })
+    -- Keep the program's output so a failed run can be shown after the debug
+    -- tab closes; otherwise the error disappears with the tab.
+    local output, exit_code = {}, 0
+    dap.listeners.after.event_output.leetcode = function(_, body)
+        if body.category == "stderr" or body.category == "stdout" then
+            table.insert(output, body.output)
+        end
+    end
+    dap.listeners.after.event_exited.leetcode_code = function(_, body)
+        exit_code = body and body.exitCode or exit_code
+    end
     local function done()
-        if q.debug_session == d then
-            back_to_question(q)
+        if q.debug_session ~= d then
+            return
+        end
+        back_to_question(q)
+        if exit_code ~= 0 then
+            local text = vim.trim(table.concat(output))
+            vim.schedule(function()
+                log.error("Debug run failed: " .. (text ~= "" and text:match("[^\n]*$") or ("exit code " .. exit_code)))
+                local result = q.console and q.console.result
+                if result and result.show_error then
+                    result:show_error({
+                        title = "Debug run failed",
+                        msg = text ~= "" and text or ("Debug run exited with code " .. exit_code),
+                    })
+                end
+            end)
         end
     end
     dap.listeners.after.event_terminated.leetcode = done
