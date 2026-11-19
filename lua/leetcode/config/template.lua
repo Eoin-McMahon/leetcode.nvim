@@ -78,7 +78,13 @@ local M = {
         reset_previous_code = true, ---@type boolean
         fold_imports = true, ---@type boolean
         hide_tags = true, ---@type boolean
+        controls = true, ---@type boolean Clickable Run and Submit in the winbar
     },
+
+    ---Key labels shown in the UI next to actions, for example
+    ---`{ run = "␣lr", submit = "␣ls" }`. Display only; map the keys yourself.
+    ---@type table<string, string>
+    hint_keys = {},
 
     console = {
         open_on_runcode = true, ---@type boolean

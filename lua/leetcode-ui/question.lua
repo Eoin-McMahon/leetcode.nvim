@@ -138,6 +138,7 @@ function Question:open_buffer(existed)
     ui_utils.win_set_buf(self.winid, self.bufnr, true)
 
     require("leetcode-ui.tags").attach(self.bufnr, self.winid)
+    require("leetcode-ui.controls").render(self)
 
     if config.user.editor.fold_imports then
         self:editor_fold_imports(false)

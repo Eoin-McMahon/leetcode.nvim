@@ -80,6 +80,7 @@ function Theme.load()
     end, config.langs)
 
     Theme.load_dynamic()
+    require("leetcode-ui.controls").highlights()
 end
 
 function Theme.load_dynamic()

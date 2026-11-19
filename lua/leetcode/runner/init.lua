@@ -30,13 +30,17 @@ Runner.run = vim.schedule_wrap(function(self, submit)
     end
 end)
 
-Runner.stop = function()
+Runner.stop = function(self)
     Runner.running = false
+    if self and self.question then
+        require("leetcode-ui.controls").set_running(self.question, nil)
+    end
 end
 
 function Runner:handle(submit)
     Runner.running = true
     local question = self.question
+    require("leetcode-ui.controls").set_running(question, submit and "submit" or "run")
 
     local body = {
         lang = question.lang,
