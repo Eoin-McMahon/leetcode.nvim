@@ -744,6 +744,7 @@ cmd.mapping_actions = {
     yank = { "yank", "Yank code" },
     exit = { "exit", "Exit" },
     signin = { "cookie browser", "Sign in again" },
+    key_hints = { "keys", "Toggle key hints" },
 }
 
 function cmd.setup_mappings()
@@ -791,6 +792,11 @@ cmd.commands = {
     timings = { cmd.timings },
     tags = { cmd.tags_toggle },
     stealth = { cmd.stealth_toggle },
+    keys = {
+        function()
+            require("leetcode-ui.controls").toggle_key_hints()
+        end,
+    },
     debug = { cmd.debug },
     layout = { cmd.layout_cycle },
     pane = {

@@ -234,6 +234,23 @@ function Controls.set_running(q, action)
     Controls.render(q)
 end
 
+---Redraw every bar of every question, for example after toggling key hints.
+function Controls.render_all()
+    for _, q in ipairs(_Lc_state.questions) do
+        Controls.render(q)
+        if q.layout then
+            q.layout.side:render_winbar()
+            q.console:render_winbar()
+        end
+    end
+end
+
+---Show or hide key hints in all bars for this session.
+function Controls.toggle_key_hints()
+    config.user.key_hints = not config.user.key_hints
+    Controls.render_all()
+end
+
 function Controls.highlights()
     vim.api.nvim_set_hl(0, "leetcode_ctl_run", { link = "DiagnosticOk", default = true })
     vim.api.nvim_set_hl(0, "leetcode_ctl_submit", { link = "DiagnosticInfo", default = true })

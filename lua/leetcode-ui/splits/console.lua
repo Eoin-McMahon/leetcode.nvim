@@ -392,6 +392,10 @@ function Console:render_winbar()
         if active then
             label = label .. " " .. LABELS[tab]
         end
+        local key = config.user.key_hints and Controls.display_key(config.user.mappings[tab])
+        if key then
+            label = ("%s (%s)"):format(label, key)
+        end
         if tab == "result" and self.status_title then
             label = ("%s %%#%s#%s"):format(label, self.status_hl or hl, (vim.trim(self.status_title):gsub("%%", "%%%%")))
         end
@@ -399,9 +403,9 @@ function Console:render_winbar()
     end
 
     table.insert(parts, "%=")
-    table.insert(parts, ("%%@v:lua._leetcode_ctl.reset@%%#leetcode_ctl_action# %s %%X%%*"):format(config.icons.reset))
-    table.insert(parts, ("%%@v:lua._leetcode_ctl.add_case@%%#leetcode_ctl_action# %s %%X%%*"):format(config.icons.add))
-    table.insert(parts, ("%%@v:lua._leetcode_ctl.hide_console@%%#leetcode_ctl_key# %s %%X%%*"):format(config.icons.hide))
+    table.insert(parts, Controls.button("reset", config.icons.reset, "leetcode_ctl_action", "reset"))
+    table.insert(parts, Controls.button("add_case", config.icons.add, "leetcode_ctl_action", "add_case"))
+    table.insert(parts, Controls.button("hide_console", config.icons.hide, "leetcode_ctl_key", "console"))
     self.pane:set_winbar(table.concat(parts, ""))
 end
 

@@ -88,12 +88,13 @@ local M = {
     ---`false` or nil leaves an action unmapped. Actions: menu, run, submit,
     ---debug, side, console, testcase, result, reset, add_case,
     ---layout, tags, stealth, info, list, daily, random, lang, last_submit,
-    ---reset_code, yank, exit, signin.
+    ---reset_code, yank, exit, signin, key_hints.
     ---@type table<string, string|false>
     mappings = {},
 
     ---Show key hints next to bar buttons. Off by default; which-key lists them.
-    ---Side panel tab letters are always shown.
+    ---Toggle at runtime with `:Leet keys`, `keys.key_hints` in the panels, or
+    ---the `key_hints` mapping. Side panel tab letters are always shown.
     ---@type boolean
     key_hints = false,
 
@@ -173,6 +174,7 @@ local M = {
         tab_next = "]t", ---@type string|string[] next side pane tab
         tab_prev = "[t", ---@type string|string[] previous side pane tab
         back = "<BS>", ---@type string|string[] back from an opened solution
+        key_hints = "?", ---@type string|string[] toggle key hints, in the read-only panels
         ---Side panel tab keys, active in the panel's read-only buffers.
         side_tabs = { description = "d", editorial = "e", solutions = "s", submissions = "u" },
     },

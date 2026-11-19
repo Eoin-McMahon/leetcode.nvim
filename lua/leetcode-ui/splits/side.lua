@@ -84,6 +84,7 @@ function Side:map_tab_keys(bufnr)
     map(bufnr, keys.toggle, function()
         self.layout:hide("side")
     end)
+    map(bufnr, keys.key_hints, Controls.toggle_key_hints)
     for tab, key in pairs(keys.side_tabs or {}) do
         map(bufnr, key, function()
             self:select(tab)
@@ -186,7 +187,8 @@ function Side:render_winbar()
         end
         table.insert(parts, ("%%%d@v:lua._leetcode_ctl.tab@%%#%s# %s %%X%%*"):format(i, hl, label))
     end
-    table.insert(parts, ("%%=%%@v:lua._leetcode_ctl.hide_side@%%#leetcode_ctl_key# %s %%X%%*"):format(config.icons.hide))
+    table.insert(parts, "%=")
+    table.insert(parts, Controls.button("hide_side", config.icons.hide, "leetcode_ctl_key", "side"))
     self.layout.panes.side:set_winbar(table.concat(parts, ""))
 end
 

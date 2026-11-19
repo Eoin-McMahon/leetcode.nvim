@@ -299,6 +299,7 @@ function Layout:set_keymaps()
     map(console.result_buf, keys.use_testcase, function()
         console:use_testcase()
     end)
+    map(console.result_buf, keys.key_hints, Controls.toggle_key_hints)
 end
 
 ---Restore hints for hidden panes, shown in the code window's winbar.
