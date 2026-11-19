@@ -23,13 +23,13 @@ local list = Button("List", {
 
 local random = Button("Random", {
     icon = "",
-    sc = "r",
+    sc = "R",
     on_press = cmd.random_question,
 })
 
 local recent = Button("Recent", {
     icon = "\u{f02da}",
-    sc = "h",
+    sc = "r",
     on_press = cmd.recent,
 })
 

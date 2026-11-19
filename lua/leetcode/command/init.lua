@@ -516,6 +516,22 @@ function cmd.testcase_reset()
     end
 end
 
+---@param name "side"|"tests"|"code"
+function cmd.fullscreen(name)
+    return function()
+        local q = require("leetcode.utils").curr_question()
+        if not q then
+            return
+        end
+        if name == "code" then
+            return require("leetcode-ui.controls").fullscreen_code(q)
+        end
+        if q.layout then
+            q.layout:fullscreen(name == "tests" and "console" or "side")
+        end
+    end
+end
+
 function cmd.testcase_new()
     local q = require("leetcode.utils").curr_question()
     if q and q.layout then
@@ -777,6 +793,9 @@ cmd.mapping_actions = {
     exit = { "exit", "Exit" },
     signin = { "cookie browser", "Sign in again" },
     key_hints = { "keys", "Toggle key hints" },
+    side_fullscreen = { "fullscreen side", "Fullscreen side panel" },
+    tests_fullscreen = { "fullscreen tests", "Fullscreen test panel" },
+    code_fullscreen = { "fullscreen code", "Fullscreen code" },
 }
 
 function cmd.setup_mappings()
@@ -824,6 +843,11 @@ cmd.commands = {
     timings = { cmd.timings },
     tags = { cmd.tags_toggle },
     stealth = { cmd.stealth_toggle },
+    fullscreen = {
+        side = { cmd.fullscreen("side") },
+        tests = { cmd.fullscreen("tests") },
+        code = { cmd.fullscreen("code") },
+    },
     keys = {
         function()
             require("leetcode-ui.controls").toggle_key_hints()
