@@ -240,6 +240,28 @@ function Result:pending(submit)
     self:write({ "", text }, { marks = { { row = 1, col = 2, end_col = #text, hl = "leetcode_desc_dim" } }, line_hls = {} })
 end
 
+---A failed request (network, auth, rate limit) replaces the "Running…"
+---placeholder instead of leaving it on screen.
+---@param err lc.err
+function Result:show_error(err)
+    self.item = nil
+    self.console:set_status("leetcode_error", "Request failed")
+    local lines = { "", "  Request failed", "" }
+    local marks = { { row = 1, col = 2, end_col = 16, hl = "leetcode_result_err" } }
+    local line_hls = {}
+    local msg = tostring(err.msg or "Something went wrong")
+    table.insert(lines, "  ")
+    table.insert(line_hls, { row = #lines - 1, hl = "leetcode_block_err" })
+    for _, l in ipairs(vim.split(msg, "\n")) do
+        table.insert(lines, "    " .. l)
+        table.insert(line_hls, { row = #lines - 1, hl = "leetcode_block_err" })
+    end
+    table.insert(lines, "  ")
+    table.insert(line_hls, { row = #lines - 1, hl = "leetcode_block_err" })
+    self:write(lines, { marks = marks, line_hls = line_hls })
+    self.console:select("result")
+end
+
 ---@param item lc.interpreter_response
 function Result:handle(item)
     self.item = item

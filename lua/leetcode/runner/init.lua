@@ -67,6 +67,9 @@ function Runner:handle(submit)
             judge:from_state(state)
         elseif err then
             judge:error(err.msg or "Something went wrong")
+            if question.console.result.show_error then
+                question.console.result:show_error(err)
+            end
         end
 
         if item then

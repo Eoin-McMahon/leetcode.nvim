@@ -156,8 +156,11 @@ function utils.check_err(err)
     if err.status then
         if err.status == 401 or err.status == 403 then
             -- require("leetcode.command").expire()
-            err.msg =
-                "Your cookie may have expired, or LeetCode has temporarily restricted API access"
+            local key = require("leetcode-ui.controls").display_key((config.user.mappings or {}).signin)
+            err.msg = ("LeetCode rejected the request: the session expired or LeetCode is limiting requests for a while. Sign in again with %s"):format(
+                key and key:gsub("%%%%", "%%") or "`:Leet cookie browser`"
+            )
+            err.auth = true
         end
     end
 

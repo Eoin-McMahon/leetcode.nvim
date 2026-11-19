@@ -743,6 +743,7 @@ cmd.mapping_actions = {
     reset_code = { "reset", "Reset code" },
     yank = { "yank", "Yank code" },
     exit = { "exit", "Exit" },
+    signin = { "cookie browser", "Sign in again" },
 }
 
 function cmd.setup_mappings()

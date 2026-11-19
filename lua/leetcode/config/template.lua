@@ -88,7 +88,7 @@ local M = {
     ---`false` or nil leaves an action unmapped. Actions: menu, run, submit,
     ---debug, side, console, testcase, result, reset, add_case,
     ---layout, tags, stealth, info, list, daily, random, lang, last_submit,
-    ---reset_code, yank, exit.
+    ---reset_code, yank, exit, signin.
     ---@type table<string, string|false>
     mappings = {},
 
