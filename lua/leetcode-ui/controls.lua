@@ -251,7 +251,20 @@ function Controls.toggle_key_hints()
     Controls.render_all()
 end
 
+---Link to the snacks dashboard's groups when present, so the menu matches the
+---user's greeter.
+---@param name string
+---@param snacks string
+---@param fallback string
+local function link(name, snacks, fallback)
+    local exists = next(vim.api.nvim_get_hl(0, { name = snacks })) ~= nil
+    vim.api.nvim_set_hl(0, name, { link = exists and snacks or fallback, default = true })
+end
+
 function Controls.highlights()
+    link("leetcode_menu_icon", "SnacksDashboardIcon", "Special")
+    link("leetcode_menu_label", "SnacksDashboardDesc", "Special")
+    link("leetcode_menu_key", "SnacksDashboardKey", "Number")
     vim.api.nvim_set_hl(0, "leetcode_ctl_run", { link = "DiagnosticOk", default = true })
     vim.api.nvim_set_hl(0, "leetcode_ctl_submit", { link = "DiagnosticInfo", default = true })
     vim.api.nvim_set_hl(0, "leetcode_ctl_key", { link = "Comment", default = true })

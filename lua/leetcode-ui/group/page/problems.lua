@@ -27,6 +27,12 @@ local random = Button("Random", {
     on_press = cmd.random_question,
 })
 
+local recent = Button("Recent", {
+    icon = "\u{f02da}",
+    sc = "h",
+    on_press = cmd.recent,
+})
+
 local daily = Button("Daily", {
     icon = "󰃭",
     sc = "d",
@@ -37,6 +43,7 @@ local back = BackButton("menu")
 
 page:insert(Buttons({
     list,
+    recent,
     random,
     daily,
     back,

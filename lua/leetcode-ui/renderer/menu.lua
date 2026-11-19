@@ -26,8 +26,21 @@ function Menu:draw()
 end
 
 ---@private
+---Esc goes back one page: press the page's Back entry if it has one.
+function Menu:back()
+    for _, button in pairs(self._.buttons or {}) do
+        if button.is_back then
+            return button:press()
+        end
+    end
+end
+
 function Menu:autocmds()
     local group_id = api.nvim_create_augroup("leetcode_menu", { clear = true })
+
+    vim.keymap.set("n", "<Esc>", function()
+        self:back()
+    end, { buffer = self.bufnr, nowait = true, desc = "Back" })
 
     api.nvim_create_autocmd("WinResized", {
         group = group_id,
@@ -96,7 +109,10 @@ function Menu:cursor_move()
     end
 
     local row = keys[self.cursor.idx]
-    local col = #vim.fn.getline(row):match("^%s*")
+    -- Rest on the label, after the icon, like a dashboard.
+    local line = vim.fn.getline(row)
+    local lead, icon = line:match("^(%s*)(%S+%s+)")
+    local col = lead and (#lead + #icon) or #line:match("^%s*")
 
     self.cursor.prev = { row, col }
     api.nvim_win_set_cursor(self.winid, self.cursor.prev)

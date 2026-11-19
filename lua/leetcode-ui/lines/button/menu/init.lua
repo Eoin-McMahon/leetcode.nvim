@@ -21,20 +21,18 @@ function MenuButton:init(text, opts)
     }, opts or {})
     MenuButton.super.init(self, {}, opts)
 
-    self:append(opts.icon, "leetcode_list")
-    self:append(" ")
-    self:append(text)
-
-    if opts.expandable then
-        self:append(" " .. opts.expand_icon, "leetcode_alt")
-    end
+    -- Laid out like a dashboard entry: icon, label, key on the right. No
+    -- chevron on entries that open a page.
+    self:append(opts.icon, "leetcode_menu_icon")
+    self:append("  ")
+    self:append(text, "leetcode_menu_label")
 
     local len = vim.api.nvim_strwidth(self:content()) + vim.api.nvim_strwidth(opts.sc or "")
-    local padding = (" "):rep(opts.width - len)
+    local padding = (" "):rep(math.max(opts.width - len, 1))
 
     self:append(padding)
     if opts.sc then
-        self:append(opts.sc, "leetcode_info")
+        self:append(opts.sc, "leetcode_menu_key")
     end
 end
 

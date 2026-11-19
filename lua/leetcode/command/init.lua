@@ -30,6 +30,15 @@ function cmd.problems(options)
     picker.question(p, options)
 end
 
+function cmd.recent()
+    require("leetcode.utils").auth_guard()
+    local questions = require("leetcode.cache.recent").questions()
+    if #questions == 0 then
+        return log.info("No recent problems yet")
+    end
+    require("leetcode.picker").question(questions, {})
+end
+
 ---@param str string
 ---@return boolean success
 local function sign_in(str)
@@ -736,6 +745,7 @@ cmd.mapping_actions = {
     stealth = { "stealth", "Toggle stealth" },
     info = { "info", "Info" },
     list = { "list", "Pick problem" },
+    recent = { "recent", "Recent problems" },
     daily = { "daily", "Daily problem" },
     random = { "random", "Random problem" },
     lang = { "lang", "Change language" },
@@ -820,6 +830,7 @@ cmd.commands = {
     --     },
     --     update = { cmd.update_sessions },
     -- },
+    recent = { cmd.recent },
     list = {
         cmd.problems,
         _args = arguments.list,

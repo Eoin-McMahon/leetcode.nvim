@@ -6,6 +6,7 @@ local MenuBackButton = MenuButton:extend("LeetMenuBackButton")
 
 ---@param page lc-menu.page
 function MenuBackButton:init(page)
+    self.is_back = true
     MenuBackButton.super.init(self, "Back", {
         icon = "",
         sc = "q",

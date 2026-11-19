@@ -339,6 +339,7 @@ function Question:handle_mount()
     self.info = Info(self)
 
     table.insert(_Lc_state.questions, self)
+    require("leetcode.cache.recent").add(self.q.title_slug)
     require("leetcode.cache.draft").apply(self)
     if vim.g.leetcode_stealth then
         require("leetcode-ui.stealth").apply(self)
