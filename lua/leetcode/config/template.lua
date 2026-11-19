@@ -93,8 +93,7 @@ local M = {
     mappings = {},
 
     ---Show key hints next to bar buttons. Off by default; which-key lists them.
-    ---Toggle at runtime with `:Leet keys`, `keys.key_hints` in the panels, or
-    ---the `key_hints` mapping. Side panel tab letters are always shown.
+    ---Toggle at runtime with `:Leet keys` or the `key_hints` mapping. Side panel tab letters are always shown.
     ---@type boolean
     key_hints = false,
 
@@ -174,7 +173,6 @@ local M = {
         tab_next = "]t", ---@type string|string[] next side pane tab
         tab_prev = "[t", ---@type string|string[] previous side pane tab
         back = "<BS>", ---@type string|string[] back from an opened solution
-        key_hints = "?", ---@type string|string[] toggle key hints, in the read-only panels
         ---Side panel tab keys, active in the panel's read-only buffers.
         side_tabs = { description = "d", editorial = "e", solutions = "s", submissions = "u" },
     },

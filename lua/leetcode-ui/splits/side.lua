@@ -84,7 +84,6 @@ function Side:map_tab_keys(bufnr)
     map(bufnr, keys.toggle, function()
         self.layout:hide("side")
     end)
-    map(bufnr, keys.key_hints, Controls.toggle_key_hints)
     for tab, key in pairs(keys.side_tabs or {}) do
         map(bufnr, key, function()
             self:select(tab)
