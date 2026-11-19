@@ -73,6 +73,10 @@ function utils.curl(method, params)
         compressed = false,
         retry = 5,
         endpoint = urls.base,
+        -- Cloudflare challenges some Run and Submit requests that curl sends
+        -- over HTTP/2, and curl cannot solve a challenge. The same requests
+        -- pass over HTTP/1.1, which every curl build supports.
+        raw = { "--http1.1" },
     }, params or {})
     local url = ("https://leetcode.%s%s"):format(config.domain, params.endpoint)
 
