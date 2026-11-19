@@ -679,6 +679,9 @@ Question.change_lang = vim.schedule_wrap(function(self, lang)
 
         vim.api.nvim_set_option_value("buflisted", false, { buf = old_bufnr })
         self:open_buffer(existed)
+        if self.layout and self.layout.side then
+            self.layout.side:refresh_language()
+        end
         if config.user.sticky_lang then
             config.lang = lang
             pcall(vim.fn.writefile, { lang }, config.storage.cache:joinpath("lang"):absolute())

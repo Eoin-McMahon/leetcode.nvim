@@ -108,6 +108,14 @@ local function ts_lang(name)
     return vim.treesitter.language.get_lang(name) or name
 end
 
+---Display name of a language slug (`cpp` is C++), else the slug.
+---@param slug string
+---@return string
+local function lang_name(slug)
+    local ok, l = pcall(require("leetcode.utils").get_lang, slug)
+    return ok and l and l.lang or slug
+end
+
 ---Keep only the reader's language where an article shows the same code in
 ---several languages back to back (fences separated by blank lines).
 ---@param md string[]
@@ -155,6 +163,60 @@ local function pick_language(md, lang)
         end
     end
     return out
+end
+
+local KEYWORDS = {}
+for _, word in ipairs(vim.split(
+    "if else elif for while do return break continue class struct enum impl trait fn func def function "
+        .. "let const var val mut static public private protected final void new delete import from use package "
+        .. "namespace using try catch except finally throw raise in is not and or switch case default match "
+        .. "true false null nullptr nil None True False self this lambda async await yield where type interface",
+    " "
+)) do
+    KEYWORDS[word] = true
+end
+
+---Rough highlights for code whose treesitter parser is not installed:
+---strings, numbers, comments and common keywords.
+---@param code_lines string[]
+---@return table<integer, { col: integer, end_col: integer, hl: string }[]>
+local function highlight_plain(code_lines)
+    local by_row = {}
+    for row, line in ipairs(code_lines) do
+        local marks = {}
+        local comment = line:find("//", 1, true) or line:find("%f[#]#[^%w{]") or line:find("^%s*#$")
+        local limit = comment and comment - 1 or #line
+        local function scan(pattern, hl)
+            local init = 1
+            while true do
+                local s, e = line:find(pattern, init)
+                if not s or s > limit then
+                    break
+                end
+                table.insert(marks, { col = s - 1, end_col = e, hl = hl })
+                init = e + 1
+            end
+        end
+        scan('"[^"]*"', "@string")
+        scan("'[^']*'", "@string")
+        scan("%f[%w_]%d+%.?%d*%f[^%w_]", "@number")
+        local init = 1
+        while true do
+            local s, e, word = line:find("([%a_][%w_]*)", init)
+            if not s or s > limit then
+                break
+            end
+            if KEYWORDS[word] then
+                table.insert(marks, { col = s - 1, end_col = e, hl = "@keyword" })
+            end
+            init = e + 1
+        end
+        if comment then
+            table.insert(marks, { col = comment - 1, end_col = #line, hl = "@comment" })
+        end
+        by_row[row - 1] = marks
+    end
+    return by_row
 end
 
 ---Treesitter highlights for a code block, per line.
@@ -232,14 +294,23 @@ function Render.render(md, win_width, opts)
     ---A code block card as wide as the panel, so code wraps only when a line
     ---would not fit. The top padding row names the language when it is not
     ---the reader's. Wrapped parts are indented under their line.
-    local function code_block(fence, code_lines)
+    local function code_block(fence, code_lines, fallback)
         blank()
         local inner = PAD .. "  "
         -- Card margins on both sides, and the inner gap on both sides.
         local code_width = math.max(win_width - 2 * #PAD - 2 * 2, 10)
-        local label = (fence == "" or ts_lang(fence) == reader_lang) and "" or fence
+        local label = ""
+        if fence ~= "" and ts_lang(fence) ~= reader_lang then
+            label = lang_name(fence)
+            if fallback and opts.lang then
+                label = ("%s  ·  no %s version here"):format(label, lang_name(opts.lang))
+            end
+        end
         add(inner .. label, { { col = #inner, end_col = #inner + #label, hl = "leetcode_desc_dim" } }, BLOCK)
         local hls = highlight(code_lines, fence)
+        if vim.tbl_isempty(hls) then
+            hls = highlight_plain(code_lines)
+        end
         for row, code in ipairs(code_lines) do
             code = code:gsub("\t", "    ")
             local marks = hls[row - 1] or {}
@@ -296,7 +367,7 @@ function Render.render(md, win_width, opts)
                 table.insert(code, md[i])
                 i = i + 1
             end
-            code_block(fence, code)
+            code_block(fence, code, line:match("^%s*```%s*[%w%+#_%-]+%s+fallback") ~= nil)
         elseif heading then
             heading = vim.trim(heading:gsub("#+%s*$", ""))
             local level = #heading_marks

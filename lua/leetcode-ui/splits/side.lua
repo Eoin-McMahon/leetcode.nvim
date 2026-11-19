@@ -179,28 +179,37 @@ function Side:show_article(tab, md, subtitle)
 end
 
 ---Show an article whose code sits in playground embeds: placeholders first,
----then each block as its code arrives, in the problem's language.
+---then each block as its code arrives, in the problem's language. The
+---source and fetched code are kept, so a language change redraws it.
 ---@param tab lc.splits.Tab
 ---@param lines string[]
 ---@param uuids string[]
 ---@param subtitle? string
 function Side:show_article_with_code(tab, lines, uuids, subtitle)
-    local lang = self.question.lang
-    local ft = utils.get_lang(lang).ft
-    local codes = {}
-    local token = {}
-    self.article_token = self.article_token or {}
-    self.article_token[tab] = token
-    self:show_article(tab, Markdown.fill_playgrounds(lines, codes, lang, ft), subtitle)
+    local src = { lines = lines, codes = {}, subtitle = subtitle }
+    self.article_src = self.article_src or {}
+    self.article_src[tab] = src
+    local function show()
+        -- A newer article replaced this one while the code loaded.
+        if self.article_src[tab] == src then
+            self:show_article(tab, Markdown.fill_playgrounds(lines, src.codes, self.question.lang), subtitle)
+        end
+    end
+    show()
     for _, uuid in ipairs(uuids) do
         article.playground(uuid, function(list)
-            -- A newer article replaced this one while the code loaded.
-            if self.article_token[tab] ~= token then
-                return
-            end
-            codes[uuid] = list or {}
-            self:show_article(tab, Markdown.fill_playgrounds(lines, codes, lang, ft), subtitle)
+            src.codes[uuid] = list or {}
+            show()
         end)
+    end
+end
+
+---Redraw open articles in the problem's current language.
+function Side:refresh_language()
+    for tab, src in pairs(self.article_src or {}) do
+        if self.articles and self.articles[tab] then
+            self:show_article(tab, Markdown.fill_playgrounds(src.lines, src.codes, self.question.lang), src.subtitle)
+        end
     end
 end
 
@@ -910,8 +919,8 @@ function Side:render_solution_list()
     if self.articles then
         self.articles.solutions = nil
     end
-    if self.article_token then
-        self.article_token.solutions = nil
+    if self.article_src then
+        self.article_src.solutions = nil
     end
     local keys = config.user.keys
     local Article = require("leetcode-ui.splits.article")

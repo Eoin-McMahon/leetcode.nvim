@@ -27,13 +27,22 @@ function Markdown.clean(content)
     return vim.split(vim.trim(s), "\n"), uuids
 end
 
----Replace playground placeholders with fenced code in the preferred language.
+---@param a string
+---@param b string
+local function same_lang(a, b)
+    return a == b or (a:match("^python") ~= nil and b:match("^python") ~= nil)
+end
+
+---Replace playground placeholders with fenced code in the reader's language.
+---LeetCode does not have every language for every article; then the
+---configured default language is used, else Python 3, else the first one,
+---and the fence is marked `fallback` so the card can say so.
 ---@param lines string[]
 ---@param codes table<string, { code: string, langSlug: string }[]>
----@param lang string lang slug, for example "python3"
----@param ft string fence language, for example "python"
+---@param lang string lang slug, for example "rust"
 ---@return string[]
-function Markdown.fill_playgrounds(lines, codes, lang, ft)
+function Markdown.fill_playgrounds(lines, codes, lang)
+    local preferred = { lang, require("leetcode.config").user.lang, "python3" }
     local out = {}
     for _, line in ipairs(lines) do
         local uuid = line:match("^%s*" .. PLAYGROUND .. "%s*$")
@@ -42,17 +51,18 @@ function Markdown.fill_playgrounds(lines, codes, lang, ft)
         else
             local list = codes[uuid]
             local pick
-            for _, c in ipairs(list or {}) do
-                if c.langSlug == lang then
-                    pick = c
+            for _, want in ipairs(preferred) do
+                for _, c in ipairs(list or {}) do
+                    if not pick and same_lang(c.langSlug, want) then
+                        pick = c
+                    end
                 end
             end
-            if not pick and list and list[1] then
-                pick = list[1]
-            end
+            pick = pick or (list and list[1])
 
             if pick then
-                table.insert(out, "```" .. (pick == list[1] and pick.langSlug ~= lang and pick.langSlug or ft))
+                local fallback = not same_lang(pick.langSlug, lang) and " fallback" or ""
+                table.insert(out, "```" .. pick.langSlug .. fallback)
                 vim.list_extend(out, vim.split((pick.code:gsub("\r\n", "\n")), "\n"))
                 table.insert(out, "```")
             elseif list then
