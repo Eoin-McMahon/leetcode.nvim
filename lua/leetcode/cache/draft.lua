@@ -214,33 +214,38 @@ local function decode_value(bytes)
     return raw and Draft.clone_string(raw)
 end
 
----Find the newest draft for a question across all browser stores.
+---Find the newest draft for a question across all browser stores and all
+---sessions. Keys carry the session id, which changes on every sign-in, so
+---matching only the current one misses drafts saved in an earlier session.
 ---@param question_id string|integer
 ---@param lang string
 ---@param cb fun(draft?: { code: string, time: integer })
 function Draft.find(question_id, lang, cb)
-    local session_id = config.auth.session_id
     local dbs = databases()
-    if not session_id or #dbs == 0 then
+    if #dbs == 0 then
         return cb()
     end
 
-    local want = ("%s_%s_%s"):format(question_id, session_id, lang)
+    local pattern = ("^%s_(%%d+)_%s(.*)$"):format(question_id, vim.pesc(lang))
     local best, pending = nil, #dbs
 
     for _, db in ipairs(dbs) do
         query(db, function(rows)
-            local code, time
+            local codes, times = {}, {}
             for _, row in ipairs(rows) do
                 local key = Draft.key(unhex(row[1]))
-                if key == want then
-                    code = decode_value(unhex(row[2]))
-                elseif key == want .. "-updated-time" then
-                    time = tonumber(decode_value(unhex(row[2])) or "")
+                local session, rest = (key or ""):match(pattern)
+                if session and rest == "" then
+                    codes[session] = decode_value(unhex(row[2]))
+                elseif session and rest == "-updated-time" then
+                    times[session] = tonumber(decode_value(unhex(row[2])) or "")
                 end
             end
-            if code and (not best or (time or 0) > best.time) then
-                best = { code = code, time = time or 0 }
+            for session, code in pairs(codes) do
+                local time = times[session] or 0
+                if code and (not best or time > best.time) then
+                    best = { code = code, time = time }
+                end
             end
 
             pending = pending - 1
@@ -253,8 +258,8 @@ function Draft.find(question_id, lang, cb)
     end
 end
 
----Load the website draft into the code section when the local file was just
----created from the snippet, or is older than the draft. The change is a normal
+---Load the website draft into the code section when the local file is new,
+---still the untouched starter code, or older than the draft. The change is a normal
 ---edit, so `u` undoes it.
 ---@param q lc.ui.Question
 function Draft.apply(q)
@@ -269,15 +274,18 @@ function Draft.apply(q)
             return
         end
 
-        if q.file_existed and draft.time / 1000 <= vim.fn.getftime(q.file:absolute()) then
-            return
-        end
-
         local range = q:editor_section_range("code")
         if not range.complete then
             return
         end
         local current = table.concat(range.lines, "\n", range.start_i, range.end_i)
+
+        -- An untouched starter file always takes the draft; otherwise the newer
+        -- of the two wins.
+        local untouched = vim.trim(current) == vim.trim(q:snippet(true) or "")
+        if q.file_existed and not untouched and draft.time / 1000 <= vim.fn.getftime(q.file:absolute()) then
+            return
+        end
         if vim.trim(current) == vim.trim(draft.code) then
             return
         end
