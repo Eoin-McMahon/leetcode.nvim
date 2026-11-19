@@ -519,6 +519,13 @@ function cmd.layout_cycle()
     q.layout:set_preset()
 end
 
+function cmd.debug()
+    local q = require("leetcode.utils").curr_question()
+    if q then
+        require("leetcode.debug").start(q)
+    end
+end
+
 function cmd.stealth_toggle()
     require("leetcode-ui.stealth").toggle()
 end
@@ -746,6 +753,7 @@ cmd.commands = {
     timings = { cmd.timings },
     tags = { cmd.tags_toggle },
     stealth = { cmd.stealth_toggle },
+    debug = { cmd.debug },
     layout = { cmd.layout_cycle },
     pane = {
         side = { cmd.pane_toggle("side") },

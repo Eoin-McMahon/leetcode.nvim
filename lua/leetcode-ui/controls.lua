@@ -49,6 +49,12 @@ _G._leetcode_ctl = {
             q.console.testcase:reset()
         end
     end,
+    debug = function()
+        local q = question_at_mouse()
+        if q then
+            require("leetcode.debug").start(q)
+        end
+    end,
     add_case = function()
         local q = question_at_mouse()
         if q then
@@ -57,25 +63,40 @@ _G._leetcode_ctl = {
     end,
 }
 
----Render a `hint_keys` value for display: `<leader>` and `<localleader>`
----become the configured keys, with a space shown as `␣`. The result is escaped
----for use in a winbar.
+---Render a `hint_keys` value for display, Doom/Spacemacs style: a space leader
+---becomes `SPC` and keys are separated, so `<leader>lh` reads `SPC l h`. Width
+---ambiguous glyphs like `␣` overlap the next character in many fonts. The
+---result is escaped for use in a winbar.
 ---@param key? string
 ---@return string?
 function Controls.display_key(key)
     if not key or key == "" then
         return
     end
-    local function show(lead, default)
-        lead = lead or default
-        return lead == " " and "␣" or lead
+    local function lead(value)
+        value = value or "\\"
+        return value == " " and config.user.leader_label or value
     end
-    key = key:gsub("<[Ll]eader>", function()
-        return show(vim.g.mapleader, "\\")
-    end):gsub("<[Ll]ocal[Ll]eader>", function()
-        return show(vim.g.maplocalleader, "\\")
-    end)
-    return (key:gsub("%%", "%%%%"))
+
+    local has_leader = key:lower():find("<leader>", 1, true) or key:lower():find("<localleader>", 1, true)
+    local tokens, i = {}, 1
+    while i <= #key do
+        local special = key:match("^<[^>]+>", i)
+        if special then
+            local lower = special:lower()
+            if lower == "<leader>" then
+                special = lead(vim.g.mapleader)
+            elseif lower == "<localleader>" then
+                special = lead(vim.g.maplocalleader)
+            end
+            table.insert(tokens, special)
+            i = i + #key:match("^<[^>]+>", i)
+        else
+            table.insert(tokens, key:sub(i, i))
+            i = i + 1
+        end
+    end
+    return (table.concat(tokens, has_leader and " " or ""):gsub("%%", "%%%%"))
 end
 
 ---@param key? string
@@ -94,7 +115,7 @@ end
 local function button(q, name, icon, label)
     local s = state[q]
     local busy = s and s.action == name
-    local hl = name == "run" and "leetcode_ctl_run" or "leetcode_ctl_submit"
+    local hl = ({ run = "leetcode_ctl_run", submit = "leetcode_ctl_submit" })[name] or "leetcode_ctl_debug"
     local glyph = busy and SPINNER[s.frame] or icon
 
     return ("%%@v:lua._leetcode_ctl.%s@%%#%s# %s %s%s %%X%%*"):format(
@@ -112,6 +133,8 @@ function Controls.build(q)
         button(q, "run", config.icons.run, "Run"),
         "  ",
         button(q, "submit", config.icons.submit, "Submit"),
+        "  ",
+        button(q, "debug", config.icons.debug, "Debug"),
     }
 
     local extra = {}
@@ -184,6 +207,7 @@ function Controls.highlights()
     vim.api.nvim_set_hl(0, "leetcode_ctl_tab_active", { link = "Title", default = true })
     vim.api.nvim_set_hl(0, "leetcode_ctl_tab", { link = "Comment", default = true })
     vim.api.nvim_set_hl(0, "leetcode_ctl_action", { link = "Special", default = true })
+    vim.api.nvim_set_hl(0, "leetcode_ctl_debug", { link = "DiagnosticWarn", default = true })
 end
 
 return Controls

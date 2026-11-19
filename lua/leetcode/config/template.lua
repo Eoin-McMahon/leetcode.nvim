@@ -85,9 +85,14 @@ local M = {
     ---Key labels shown in the UI next to actions, for example
     ---`{ run = "<leader>lr", submit = "<leader>ls" }`. `<leader>` is shown as
     ---the configured mapleader. Display only; map the keys yourself. Known
-    ---names: run, submit, side, console, testcase, result, reset, add_case.
+    ---names: run, submit, debug, side, console, testcase, result, reset, add_case.
     ---@type table<string, string>
     hint_keys = {},
+
+    ---How a space leader is shown in key hints: "SPC" gives `SPC l h`. A Nerd
+    ---icon such as "󱁐" also works; some terminals draw it wider than a cell.
+    ---@type string
+    leader_label = "SPC",
 
     ---"classic" keeps the floating console. "splits" opens description, code,
     ---testcase and result as real windows.
@@ -177,6 +182,11 @@ local M = {
 
     ---@type boolean
     image_support = false,
+
+    debug = {
+        ---Python with debugpy. nil tries Mason's debugpy, then `python3`.
+        python = nil, ---@type string?
+    },
 
     stealth = {
         ---Show uncalled work-style code around the solution. Virtual lines have

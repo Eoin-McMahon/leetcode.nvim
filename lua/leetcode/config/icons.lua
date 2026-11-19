@@ -9,6 +9,7 @@ local icons = {
     submit = "\u{f093}",
     upvote = "\u{f062}",
     reset = "\u{f0e2}",
+    debug = "\u{f188}",
     add = "\u{f067}",
     param = "\u{f0da}",
     status = {
@@ -44,6 +45,7 @@ icons.plain = {
     submit = "⇪",
     upvote = "▲",
     reset = "↺",
+    debug = "◉",
     add = "+",
     param = "›",
     status = { ac = "✓", notac = "✗", todo = "·" },
