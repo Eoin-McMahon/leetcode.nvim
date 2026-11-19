@@ -36,6 +36,10 @@ function Stealth.filename()
     if q then
         return Stealth.filename_for(q)
     end
+    local menu = _Lc_state.menu
+    if menu and menu.bufnr == bufnr then
+        return "[No Name]"
+    end
     local name = vim.api.nvim_buf_get_name(bufnr)
     return name == "" and "[No Name]" or vim.fn.fnamemodify(name, ":~:.")
 end

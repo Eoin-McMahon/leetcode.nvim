@@ -9,16 +9,6 @@ local Overlay = {}
 local NS = vim.api.nvim_create_namespace("leetcode_stealth")
 local group = vim.api.nvim_create_augroup("leetcode_stealth", { clear = true })
 
-local KINDS = {
-    type = "type",
-    class = "type",
-    ["function"] = "function",
-    method = "function",
-    parameter = "parameter",
-}
--- Receiver names read as ordinary code; renaming them looks odd.
-local KEEP = { self = true, cls = true, this = true }
-
 ---@type table<string, string[][][]> highlighted decoy chunks per lang and side
 local decoy_cache = {}
 
@@ -31,36 +21,18 @@ local function ts_lang(q)
     return vim.treesitter.language.get_lang(filetype) or filetype
 end
 
----Symbols the LeetCode snippet defines: class, method and parameter names, plus
----helper types named in the snippet's comments (`class ListNode`).
+---The one name that gives a LeetCode file away: the `Solution` class, or the
+---design question's class (`LRUCache`). Method and parameter names read as
+---ordinary code and stay.
 ---@param q lc.ui.Question
----@return { name: string, kind: "type"|"function"|"parameter" }[]
+---@return { name: string, kind: "type" }[]
 function Overlay.symbols(q)
-    local snippet = q:snippet(true) or ""
-    local symbols = {}
-
-    local lang = ts_lang(q)
-    local ok, parser = pcall(vim.treesitter.get_string_parser, snippet, lang)
-    local query = ok and vim.treesitter.query.get(lang, "locals")
-    if ok and query then
-        local tree = parser:parse(true)[1]
-        for id, node in query:iter_captures(tree:root(), snippet) do
-            local kind = KINDS[query.captures[id]:match("^local%.definition%.(%w+)") or ""]
-            local name = vim.treesitter.get_node_text(node, snippet)
-            if kind and not KEEP[name] then
-                table.insert(symbols, { name = name, kind = kind })
-            end
-        end
+    local md = q.q.meta_data
+    local name = type(md) == "table" and md.systemdesign and md.classname or "Solution"
+    if not (q:snippet(true) or ""):find(name, 1, true) then
+        return {}
     end
-
-    for name in snippet:gmatch("class%s+([%a_][%w_]*)") do
-        table.insert(symbols, { name = name, kind = "type" })
-    end
-    for name in snippet:gmatch("struct%s+([%a_][%w_]*)") do
-        table.insert(symbols, { name = name, kind = "type" })
-    end
-
-    return symbols
+    return { { name = name, kind = "type" } }
 end
 
 ---@param bufnr integer
