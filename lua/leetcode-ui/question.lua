@@ -94,6 +94,7 @@ end
 
 function Question:create_buffer()
     local path, existed = self:path()
+    self.file_existed = existed
 
     vim.cmd("$tabe " .. path)
     self.bufnr = vim.api.nvim_get_current_buf()
@@ -323,6 +324,7 @@ function Question:handle_mount()
     self.info = Info(self)
 
     table.insert(_Lc_state.questions, self)
+    require("leetcode.cache.draft").apply(self)
 
     self:autocmds()
     utils.exec_hooks("question_enter", self)
