@@ -173,18 +173,25 @@ end
 ---`▤ Description (d)  ✎ (e)  ☰ (s)  ✓ (u)`. Fits a narrow panel.
 function Side:render_winbar()
     local parts = { " " }
-    for i, tab in ipairs(TABS) do
+    for i, tab in ipairs(self:tabs()) do
         local active = tab == self.active
         local hl = active and "leetcode_ctl_tab_active" or "leetcode_ctl_tab"
         local label = config.icons.tabs[tab]
+        if tab == "submission" then
+            local ok = self.submission and self.submission.status_code == 10
+            label = ok and config.icons.status.ac or config.icons.tabs.failed
+        end
         if active then
-            label = label .. " " .. LABELS[tab]
+            label = label .. " " .. self:label(tab)
         end
         local key = (config.user.keys.side_tabs or {})[tab]
         if key then
             label = ("%s (%s)"):format(label, Controls.display_key(key_text(key)))
         end
         table.insert(parts, ("%%%d@v:lua._leetcode_ctl.tab@%%#%s# %s %%X%%*"):format(i, hl, label))
+        if tab == "submission" then
+            table.insert(parts, ("%%@v:lua._leetcode_ctl.close_submission@%%#leetcode_ctl_key#%s %%X%%*"):format(config.icons.hide))
+        end
     end
     table.insert(parts, "%=")
     local pane = self.layout.panes.side
@@ -196,6 +203,121 @@ function Side:render_winbar()
         table.insert(parts, Controls.button("hide_side", config.icons.hide, "leetcode_ctl_key", "side"))
     end
     self.layout.panes.side:set_winbar(table.concat(parts, ""))
+end
+
+---Tabs in order. A submission result sits right after the description while
+---one is open, like the website.
+---@return lc.splits.Tab[]
+function Side:tabs()
+    if not self.submission then
+        return TABS
+    end
+    return { "description", "submission", "editorial", "solutions", "submissions" }
+end
+
+---@param tab string
+function Side:label(tab)
+    if tab == "submission" then
+        local s = self.submission
+        return s and (s.pending and "Submitting…" or vim.trim(s.status_msg or "Result")) or "Result"
+    end
+    return LABELS[tab]
+end
+
+---Show "Submitting…" in the result tab while the judge runs.
+function Side:show_submission_pending()
+    self.submission = { pending = true }
+    self:select("submission")
+    self:set_lines("submission", { "", "  Submitting…" }, { { row = 1, hl = "leetcode_desc_dim" } })
+end
+
+---@param item table submit response
+function Side:show_submission(item)
+    self.submission = item
+    self.submission_details = nil
+    self:select("submission")
+    self:render_submission()
+
+    if item.status_code == 10 and item.submission_id then
+        article.submission_details(item.submission_id, function(details)
+            if details and self.submission == item then
+                self.submission_details = details
+                self:render_submission()
+            end
+        end)
+    end
+end
+
+function Side:render_submission()
+    local item = self.submission
+    if not item or item.pending then
+        return
+    end
+    local pane = self.layout.panes.side
+    local width = pane:is_open() and vim.api.nvim_win_get_width(pane.winid) or self.last_width or 60
+    local out = require("leetcode-ui.splits.submission").render(item, self.question, width, self.submission_details)
+
+    local bufnr = self:buffer("submission")
+    vim.bo[bufnr].filetype = config.name
+    vim.bo[bufnr].modifiable = true
+    vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, out.lines)
+    vim.bo[bufnr].modifiable = false
+    vim.api.nvim_buf_clear_namespace(bufnr, NS, 0, -1)
+    for _, m in ipairs(out.marks) do
+        pcall(vim.api.nvim_buf_set_extmark, bufnr, NS, m.row, m.col, {
+            end_col = math.min(m.end_col, #out.lines[m.row + 1]),
+            hl_group = m.hl,
+        })
+    end
+    for _, l in ipairs(out.line_hls) do
+        vim.api.nvim_buf_set_extmark(bufnr, NS, l.row, 0, { line_hl_group = l.hl })
+    end
+
+    local function activate()
+        local cursor = vim.api.nvim_win_get_cursor(0)
+        for _, b in ipairs(out.buttons) do
+            if b.row == cursor[1] and cursor[2] >= b.col and cursor[2] < b.end_col then
+                return self:submission_action(b.action)
+            end
+        end
+        local slug = out.links[cursor[1]]
+        if slug then
+            local problem = require("leetcode.cache.problemlist").get_by_title_slug(slug)
+            if problem then
+                require("leetcode-ui.question")(problem):mount()
+            end
+        end
+    end
+    map(bufnr, config.user.keys.confirm, activate)
+    vim.keymap.set("n", "<LeftRelease>", activate, { buffer = bufnr })
+end
+
+---@param action "use"|"debug"
+function Side:submission_action(action)
+    local item = self.submission
+    if not (item and item.last_testcase) then
+        return
+    end
+    local console = self.question.console
+    if action == "use" then
+        console.result.last_testcase = item.last_testcase
+        console:use_testcase()
+    elseif action == "debug" then
+        require("leetcode.debug").start(self.question, { vim.split(item.last_testcase, "\n") })
+    end
+end
+
+function Side:close_submission()
+    self.submission = nil
+    if self.active == "submission" then
+        self:select("description")
+    end
+    local bufnr = self.bufs.submission
+    self.bufs.submission = nil
+    if bufnr and vim.api.nvim_buf_is_valid(bufnr) then
+        pcall(vim.api.nvim_buf_delete, bufnr, { force = true })
+    end
+    self:render_winbar()
 end
 
 ---Draw the description into its tab buffer at the side pane's width.
@@ -253,12 +375,13 @@ end
 ---@param step integer
 function Side:cycle(step)
     local idx = 1
-    for i, tab in ipairs(TABS) do
+    local tabs = self:tabs()
+    for i, tab in ipairs(tabs) do
         if tab == self.active then
             idx = i
         end
     end
-    self:select(TABS[(idx - 1 + step) % #TABS + 1])
+    self:select(tabs[(idx - 1 + step) % #tabs + 1])
 end
 
 function Side:prefetch()
@@ -465,11 +588,20 @@ function Side:load_submission()
     end)
 end
 
+_G._leetcode_ctl.close_submission = function()
+    local winid = vim.fn.getmousepos().winid
+    for _, q in ipairs(_Lc_state.questions) do
+        if q.layout and q.layout.panes.side.winid == winid then
+            q.layout.side:close_submission()
+        end
+    end
+end
+
 _G._leetcode_ctl.tab = function(minwid)
     local winid = vim.fn.getmousepos().winid
     for _, q in ipairs(_Lc_state.questions) do
         if q.layout and q.layout.panes.side.winid == winid then
-            q.layout.side:select(TABS[minwid])
+            q.layout.side:select(q.layout.side:tabs()[minwid])
         end
     end
 end

@@ -129,4 +129,19 @@ function article.submission_code(id, cb)
     })
 end
 
+---@param id string|integer
+---@param cb fun(res?: table, err?: lc.err)
+function article.submission_details(id, cb)
+    local query = [[
+        query ($id: Int!) {
+            submissionDetails(submissionId: $id) { runtimeDistribution memoryDistribution totalCorrect totalTestcases }
+        }
+    ]]
+    utils.query(query, { id = tonumber(id) }, {
+        callback = callback(cb, function(data)
+            return data.submissionDetails
+        end),
+    })
+end
+
 return article

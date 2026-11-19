@@ -97,6 +97,8 @@ M.description = function(tbl)
         desc_input = { fg = hl("DiagnosticInfo").fg, bold = true },
         desc_output = { fg = hl("DiagnosticOk").fg, bold = true },
         desc_explain = { fg = hl("DiagnosticHint").fg, bold = true },
+        chart_bar = { fg = blend(normal.fg, bg, 0.35) },
+        chart_mine = { fg = hl("Function").fg or hl("DiagnosticInfo").fg },
         chip_active = { fg = normal.fg, bg = blend(normal.fg, bg, 0.16), bold = true },
         result_ok = { fg = hl("DiagnosticOk").fg, bold = true },
         result_err = { fg = hl("DiagnosticError").fg, bold = true },

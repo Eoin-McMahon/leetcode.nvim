@@ -176,7 +176,8 @@ function Debug.toggle(q)
 end
 
 ---@param q lc.ui.Question
-function Debug.start(q)
+---@param only_cases? string[][] debug these cases instead of the test panel's
+function Debug.start(q, only_cases)
     if not SUPPORTED[q.lang] then
         return log.error(("Local debugging supports Python for now, not %s"):format(q.lang))
     end
@@ -191,7 +192,7 @@ function Debug.start(q)
 
     local file = debug_copy(q)
     local spec = vim.fn.tempname() .. ".json"
-    vim.fn.writefile({ vim.json.encode({ solution = file, meta = q.q.meta_data, cases = cases(q) }) }, spec)
+    vim.fn.writefile({ vim.json.encode({ solution = file, meta = q.q.meta_data, cases = only_cases or cases(q) }) }, spec)
 
     vim.cmd("tabnew " .. vim.fn.fnameescape(file))
     local d = { tab = vim.api.nvim_get_current_tabpage(), bufnr = vim.api.nvim_get_current_buf() }

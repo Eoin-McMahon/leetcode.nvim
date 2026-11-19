@@ -244,6 +244,14 @@ end
 ---placeholder instead of leaving it on screen.
 ---@param err lc.err
 function Result:show_error(err)
+    if self.console.submitting then
+        self.console.submitting = false
+        return self.console.layout.side:show_submission({
+            status_code = -1,
+            status_msg = "Submission failed",
+            full_runtime_error = tostring(err.msg or "Something went wrong"),
+        })
+    end
     self.item = nil
     self.console:set_status("leetcode_error", "Request failed")
     local lines = { "", "  Request failed", "" }
@@ -291,7 +299,12 @@ function Result:handle(item)
         if status == "ac" then
             config.stats.update_streak()
         end
-        self.console.layout.side:load("submissions", true)
+        local side = self.console.layout.side
+        side:load("submissions", true)
+        self.console.submitting = false
+        side:show_submission(item)
+        Controls.render(self.console.question)
+        return
     end
 
     self:draw()
@@ -507,10 +520,17 @@ function Console:run(submit)
         return log.warn("Runner is busy")
     end
 
-    self:set_status(nil)
-    self.result:pending(submit == true)
-    -- Running always opens the results, expanding a collapsed panel.
-    self:select("result")
+    if submit then
+        -- Submissions show in the side panel, like the website.
+        self.submitting = true
+        self.layout.side:show_submission_pending()
+    else
+        self.submitting = false
+        self:set_status(nil)
+        self.result:pending(false)
+        -- Running always opens the results, expanding a collapsed panel.
+        self:select("result")
+    end
 
     Runner:init(self.question):run(submit)
 end
