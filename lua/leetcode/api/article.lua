@@ -60,7 +60,7 @@ end
 function article.solutions(title_slug, cb)
     local query = [[
         query ($slug: String!, $skip: Int!, $first: Int!) {
-            ugcArticleSolutionArticles(questionSlug: $slug, orderBy: HOT, skip: $skip, first: $first) {
+            ugcArticleSolutionArticles(questionSlug: $slug, orderBy: MOST_VOTES, skip: $skip, first: $first) {
                 edges { node { title topicId hitCount author { userName } reactions { count reactionType } } }
             }
         }
