@@ -223,6 +223,19 @@ function Render.parse(html)
         end
     end
 
+    -- Some problems write examples as plain paragraphs after "Example N"
+    -- instead of a <pre> or example block: shade those too.
+    local in_example = false
+    for _, b in ipairs(blocks) do
+        if b.kind == "heading" then
+            in_example = (b.segs[1].text or ""):match("^Example") ~= nil
+        elseif in_example and (b.kind == "para" or b.kind == "li") then
+            b.shaded = true
+        elseif b.kind == "pre" then
+            in_example = false
+        end
+    end
+
     return blocks
 end
 
@@ -461,6 +474,12 @@ function Render.render(q, win_width)
             local inner = PAD .. (b.shaded and "  " or "")
             local lines = wrap(b.segs, width - (b.shaded and 2 or 0), inner, inner)
             if b.shaded then
+                local first = b.segs[1]
+                local labelled = first
+                    and (first.hl == "leetcode_desc_input" or first.hl == "leetcode_desc_output" or first.hl == "leetcode_desc_explain")
+                if labelled and in_block() and vim.trim(out.lines[#out.lines]) ~= "" then
+                    add(PAD, nil, "leetcode_desc_block")
+                end
                 open_block()
             end
             for _, l in ipairs(lines) do

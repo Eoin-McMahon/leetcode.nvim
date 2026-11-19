@@ -120,15 +120,18 @@ function Render.render(item, q, width, details)
         local buckets = ok_json and type(parsed) == "table" and parsed.distribution
         if type(buckets) == "table" and #buckets > 0 then
             heading("Runtime distribution")
+            add("")
             local mine = tonumber((item.status_runtime or ""):match("%d+")) or -1
-            -- Columns as wide as the widest label, and only as many as fit.
+            -- Fill the width: as many buckets as fit with readable labels,
+            -- then widen the bars to use all the space.
             local label_w = 0
             for _, b in ipairs(vim.list_slice(buckets, 1, CHART_BUCKETS)) do
                 label_w = math.max(label_w, #(tostring(b[1]) .. "ms"))
             end
-            local col_w = math.max(label_w + 1, 3)
-            local count = math.max(math.min(CHART_BUCKETS, math.floor(inner / col_w)), 1)
+            local count = math.max(math.min(CHART_BUCKETS, #buckets, math.floor(inner / (label_w + 1))), 1)
             local shown = vim.list_slice(buckets, 1, count)
+            local col_w = math.floor(inner / #shown)
+            local bar_w = math.max(col_w - 1, 1)
             local max = 0
             for _, b in ipairs(shown) do
                 max = math.max(max, tonumber(b[2]) or 0)
@@ -145,15 +148,15 @@ function Render.render(item, q, width, details)
                     local units = max > 0 and (tonumber(b[2]) or 0) / max * CHART_HEIGHT * 8 or 0
                     local fill = units - (level - 1) * 8
                     local glyph = fill >= 8 and BARS[8] or (fill > 0 and BARS[math.max(math.floor(fill), 1)] or " ")
-                    local cell = glyph .. glyph .. (" "):rep(col_w - 2)
+                    local bar = glyph:rep(bar_w)
                     if glyph ~= " " then
                         table.insert(m, {
                             col = #line,
-                            end_col = #line + #glyph * 2,
+                            end_col = #line + #bar,
                             hl = i == mine_idx and "leetcode_chart_mine" or "leetcode_chart_bar",
                         })
                     end
-                    line = line .. cell
+                    line = line .. bar .. " "
                 end
                 add(line, m)
             end

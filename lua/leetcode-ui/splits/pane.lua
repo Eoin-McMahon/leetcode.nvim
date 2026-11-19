@@ -37,14 +37,37 @@ function Pane:is_open()
     return self.winid ~= nil and vim.api.nvim_win_is_valid(self.winid)
 end
 
+---Window options for a pane. Reapplied on every buffer switch: a buffer
+---shown in a window for the first time takes the global values (for example
+---`number` and `spell`), not the window's.
+---@param winid integer
+function Pane:apply_win_opts(winid)
+    ui_utils.win_set_opts(
+        winid,
+        vim.tbl_extend("force", {
+            number = false,
+            relativenumber = false,
+            signcolumn = "no",
+            foldcolumn = "0",
+            cursorline = false,
+            spell = false,
+            list = false,
+            winfixwidth = self.vertical == true,
+            winfixheight = self.vertical == false,
+        }, self.win_opts)
+    )
+end
+
 ---@param bufnr integer
 function Pane:set_buf(bufnr)
     self.bufnr = bufnr
     if self:is_open() then
         ui_utils.win_set_buf(self.winid, bufnr, true)
+        self:apply_win_opts(self.winid)
     end
     if self:is_fullscreen() then
         ui_utils.win_set_buf(self.float, bufnr, true)
+        self:apply_win_opts(self.float)
     end
 end
 
@@ -74,7 +97,7 @@ function Pane:enter_fullscreen(on_exit)
         style = "minimal",
         zindex = 45,
     })
-    ui_utils.win_set_opts(self.float, vim.tbl_extend("force", { wrap = true, linebreak = true }, self.win_opts))
+    self:apply_win_opts(self.float)
     if self.winbar then
         vim.wo[self.float].winbar = self.winbar
     end
@@ -112,21 +135,8 @@ function Pane:open(parent, dir, size)
     end
 
     self.winid = vim.api.nvim_open_win(self.bufnr, false, config)
-
-    ui_utils.win_set_opts(
-        self.winid,
-        vim.tbl_extend("force", {
-            number = false,
-            relativenumber = false,
-            signcolumn = "no",
-            foldcolumn = "0",
-            cursorline = false,
-            spell = false,
-            list = false,
-            winfixwidth = vertical,
-            winfixheight = not vertical,
-        }, self.win_opts)
-    )
+    self.vertical = vertical
+    self:apply_win_opts(self.winid)
     ui_utils.win_set_winfixbuf(self.winid)
     if self.winbar then
         vim.wo[self.winid].winbar = self.winbar

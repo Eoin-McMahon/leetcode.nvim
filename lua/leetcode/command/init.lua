@@ -573,6 +573,36 @@ function cmd.fullscreen(name)
     end
 end
 
+---Fullscreen whichever panel the cursor is in, or leave fullscreen.
+function cmd.fullscreen_current()
+    local q = require("leetcode.utils").curr_question()
+    if not q then
+        return
+    end
+    local win = api.nvim_get_current_win()
+    if win == q.winid or win == q.code_float then
+        return require("leetcode-ui.controls").fullscreen_code(q)
+    end
+    if q.layout then
+        for _, name in ipairs({ "side", "console" }) do
+            local pane = q.layout.panes[name]
+            if win == pane.winid or win == pane.float then
+                return q.layout:fullscreen(name)
+            end
+        end
+    end
+end
+
+---@param tab lc.splits.Tab
+function cmd.tab_toggle(tab)
+    return function()
+        local q = require("leetcode.utils").curr_question()
+        if q and q.layout then
+            q.layout.side:toggle_tab(tab)
+        end
+    end
+end
+
 function cmd.testcase_new()
     local q = require("leetcode.utils").curr_question()
     if q and q.layout then
@@ -835,6 +865,11 @@ cmd.mapping_actions = {
     signin = { "cookie browser", "Sign in again" },
     key_hints = { "keys", "Toggle key hints" },
     side_fullscreen = { "fullscreen side", "Fullscreen description panel" },
+    fullscreen = { "fullscreen", "Toggle fullscreen" },
+    tab_description = { "tab description", "Toggle description" },
+    tab_editorial = { "tab editorial", "Toggle editorial" },
+    tab_solutions = { "tab solutions", "Toggle solutions" },
+    tab_submissions = { "tab submissions", "Toggle submissions" },
     tests_fullscreen = { "fullscreen tests", "Fullscreen tests" },
     code_fullscreen = { "fullscreen code", "Fullscreen code" },
 }
@@ -842,6 +877,11 @@ cmd.mapping_actions = {
 ---Actions that only make sense inside a problem. They are mapped buffer-local
 ---in the problem's buffers, so they exist only there.
 cmd.problem_actions = {
+    fullscreen = true,
+    tab_description = true,
+    tab_editorial = true,
+    tab_solutions = true,
+    tab_submissions = true,
     run = true,
     submit = true,
     debug = true,
@@ -952,7 +992,14 @@ cmd.commands = {
     tags = { cmd.tags_toggle },
     stealth = { cmd.stealth_toggle },
     home = { cmd.home },
+    tab = {
+        description = { cmd.tab_toggle("description") },
+        editorial = { cmd.tab_toggle("editorial") },
+        solutions = { cmd.tab_toggle("solutions") },
+        submissions = { cmd.tab_toggle("submissions") },
+    },
     fullscreen = {
+        cmd.fullscreen_current,
         side = { cmd.fullscreen("side") },
         tests = { cmd.fullscreen("tests") },
         code = { cmd.fullscreen("code") },

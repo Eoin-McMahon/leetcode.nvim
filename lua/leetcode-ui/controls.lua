@@ -349,6 +349,7 @@ function Controls.highlights()
     vim.api.nvim_set_hl(0, "leetcode_ctl_tab_active", { link = "Title", default = true })
     vim.api.nvim_set_hl(0, "leetcode_ctl_tab", { link = "Comment", default = true })
     vim.api.nvim_set_hl(0, "leetcode_ctl_action", { link = "Special", default = true })
+    vim.api.nvim_set_hl(0, "leetcode_activity_mark", { link = "Title", default = true })
     vim.api.nvim_set_hl(0, "leetcode_ctl_lang", { link = "Title", default = true })
     vim.api.nvim_set_hl(0, "leetcode_ctl_debug", { link = "DiagnosticWarn", default = true })
 

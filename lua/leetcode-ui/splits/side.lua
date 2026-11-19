@@ -220,6 +220,39 @@ function Side:render_winbar()
     self.layout.panes.side:set_winbar(table.concat(parts, ""))
 end
 
+---Width to render for: the fullscreen float when there is one, so text uses
+---the space (wrapping at 88), else the pane.
+---@return integer
+function Side:width()
+    local pane = self.layout.panes.side
+    local width
+    if pane:is_fullscreen() then
+        width = vim.api.nvim_win_get_width(pane.float)
+    elseif pane:is_open() and not self.collapsed then
+        width = vim.api.nvim_win_get_width(pane.winid)
+    end
+    self.last_width = width or self.last_width or 60
+    return self.last_width
+end
+
+---Show a tab: opens the panel on it, switches to it, or collapses the panel
+---when that tab is already showing.
+---@param tab lc.splits.Tab
+function Side:toggle_tab(tab)
+    if self.layout:is_visible("side") and not self.collapsed and self.active == tab then
+        return self:set_collapsed(true)
+    end
+    self:select(tab)
+end
+
+---Re-render width-dependent tabs, after a resize or fullscreen change.
+function Side:rerender()
+    self:render_description()
+    if self.submission and not self.submission.pending then
+        self:render_submission()
+    end
+end
+
 ---@return integer
 function Side:active_buf()
     return self:buffer(self.active)
@@ -243,13 +276,15 @@ function Side:toggle()
     self:set_collapsed(not self.collapsed)
 end
 
----The collapsed column: an expand chevron, then each tab's icon and key.
+---The collapsed column, like an activity bar: an expand chevron, then each
+---tab's icon with a blank row between, the active one marked with an accent
+---bar and highlighted. No keys; which-key lists them.
 function Side:render_collapsed()
     local bufnr = self.collapsed_buf
     local ns = vim.api.nvim_create_namespace("leetcode_side_collapsed")
     local tabs = self:tabs()
     local lines = {}
-    for _ = 0, #tabs + 1 do
+    for _ = 1, #tabs * 2 + 1 do
         table.insert(lines, "")
     end
     vim.bo[bufnr].modifiable = true
@@ -258,15 +293,17 @@ function Side:render_collapsed()
     vim.api.nvim_buf_clear_namespace(bufnr, ns, 0, -1)
 
     vim.api.nvim_buf_set_extmark(bufnr, ns, 0, 0, {
-        virt_text = { { " " .. config.icons.collapse_right, "leetcode_ctl_key" } },
+        virt_text = { { "  " .. config.icons.collapse_right, "leetcode_ctl_key" } },
         virt_text_pos = "overlay",
     })
     for i, tab in ipairs(tabs) do
         local icon = config.icons.tabs[tab] or config.icons.tabs.submission
-        local key = (config.user.keys.side_tabs or {})[tab]
-        local text = " " .. icon .. (key and (" (" .. key_text(key) .. ")") or "")
-        vim.api.nvim_buf_set_extmark(bufnr, ns, i + 1, 0, {
-            virt_text = { { text, tab == self.active and "leetcode_ctl_tab_active" or "leetcode_ctl_tab" } },
+        local active = tab == self.active
+        vim.api.nvim_buf_set_extmark(bufnr, ns, i * 2, 0, {
+            virt_text = {
+                { active and "▎" or " ", "leetcode_activity_mark" },
+                { " " .. icon, active and "leetcode_ctl_tab_active" or "leetcode_ctl_tab" },
+            },
             virt_text_pos = "overlay",
         })
     end
@@ -320,8 +357,7 @@ function Side:render_submission()
     if not item or item.pending then
         return
     end
-    local pane = self.layout.panes.side
-    local width = pane:is_open() and vim.api.nvim_win_get_width(pane.winid) or self.last_width or 60
+    local width = self:width()
     local out = require("leetcode-ui.splits.submission").render(item, self.question, width, self.submission_details)
 
     local bufnr = self:buffer("submission")
@@ -390,8 +426,7 @@ end
 ---Draw the description into its tab buffer at the side pane's width.
 function Side:render_description()
     local bufnr = self:buffer("description")
-    local pane = self.layout.panes.side
-    local width = pane:is_open() and vim.api.nvim_win_get_width(pane.winid) or self.last_width or 60
+    local width = self:width()
     self.last_width = width
 
     local out = require("leetcode-ui.splits.description").render(self.question, width)

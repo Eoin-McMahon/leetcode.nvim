@@ -37,8 +37,8 @@ local PRESETS = {
 
 local PRESET_ORDER = { "website", "wide" }
 
--- Width of the collapsed side panel: icon, space, "(d)".
-local SIDE_STRIP = 8
+-- Width of the collapsed side panel: accent bar, space, icon, margin.
+local SIDE_STRIP = 5
 
 local HINT_LABELS = { side = "side panel", console = "console" }
 
@@ -373,6 +373,7 @@ function Layout:fullscreen(name)
 end
 
 function Layout:refresh_bars()
+    self.side:rerender()
     self.side:render_winbar()
     if not self.console.collapsed then
         self.console:render_winbar()
