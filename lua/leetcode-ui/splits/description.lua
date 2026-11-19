@@ -192,6 +192,21 @@ function Render.parse(html)
     end
     flush()
 
+    -- Example labels get their own colours.
+    local LABEL_HL = {
+        input = "leetcode_desc_input",
+        output = "leetcode_desc_output",
+        explanation = "leetcode_desc_explain",
+    }
+    for _, b in ipairs(blocks) do
+        for _, seg in ipairs(b.segs) do
+            local name = seg.hl == "leetcode_desc_bold" and vim.trim(seg.text):lower():match("^(%a+):?$")
+            if name and LABEL_HL[name] then
+                seg.hl = LABEL_HL[name]
+            end
+        end
+    end
+
     -- "Example 1:", "Constraints:", "Follow-up:" paragraphs become headings.
     for _, b in ipairs(blocks) do
         if b.kind == "para" and #b.segs > 0 then
@@ -254,6 +269,37 @@ local function wrap(segs, width, first, rest)
     return lines
 end
 
+---Language-neutral highlighting for example values and explanations:
+---numbers, strings, literals and line comments.
+---@param text string
+---@param from integer byte column to start at
+---@return { col: integer, end_col: integer, hl: string }[]
+local function code_marks(text, from)
+    local marks = {}
+    local comment = text:find("//", from + 1, true) or text:find("%s#%s", from + 1)
+    local limit = comment and comment - 1 or #text
+    local function scan(pattern, hl)
+        local init = from + 1
+        while true do
+            local s, e = text:find(pattern, init)
+            if not s or s > limit then
+                break
+            end
+            table.insert(marks, { col = s - 1, end_col = e, hl = hl })
+            init = e + 1
+        end
+    end
+    scan('"[^"]*"', "@string")
+    scan("%f[%w%-]%-?%d+%.?%d*%f[^%w%.]", "@number")
+    scan("%f[%w]true%f[^%w]", "@boolean")
+    scan("%f[%w]false%f[^%w]", "@boolean")
+    scan("%f[%w]null%f[^%w]", "@constant.builtin")
+    if comment then
+        table.insert(marks, { col = comment - 1, end_col = #text, hl = "@comment" })
+    end
+    return marks
+end
+
 ---@param n number
 local function short(n)
     n = tonumber(n) or 0
@@ -281,6 +327,18 @@ function Render.render(q, win_width)
     local function add(text, marks, line_hl)
         table.insert(out.lines, text)
         local row = #out.lines - 1
+        -- Inside example blocks, code highlighting goes under the label colours.
+        if line_hl == "leetcode_desc_block" then
+            local from = 0
+            for _, m in ipairs(marks or {}) do
+                if m.hl == "leetcode_desc_input" or m.hl == "leetcode_desc_output" or m.hl == "leetcode_desc_explain" then
+                    from = math.max(from, m.end_col)
+                end
+            end
+            for _, m in ipairs(code_marks(text, from)) do
+                table.insert(out.marks, { row = row, col = m.col, end_col = m.end_col, hl = m.hl })
+            end
+        end
         for _, m in ipairs(marks or {}) do
             table.insert(out.marks, { row = row, col = m.col, end_col = m.end_col, hl = m.hl })
         end
@@ -376,7 +434,14 @@ function Render.render(q, win_width)
             end
             close_block()
             open_block()
-            for _, segs in ipairs(seg_lines) do
+            for n, segs in ipairs(seg_lines) do
+                -- A blank shaded row before each label after the first, so
+                -- Input, Output and Explanation read as separate parts.
+                local first = segs[1]
+                local prev_blank = vim.trim(out.lines[#out.lines] or "") == ""
+                if n > 1 and not prev_blank and first and (first.hl == "leetcode_desc_input" or first.hl == "leetcode_desc_output" or first.hl == "leetcode_desc_explain") then
+                    add(PAD, nil, "leetcode_desc_block")
+                end
                 for _, l in ipairs(wrap(segs, width - 2, PAD .. "  ", PAD .. "    ")) do
                     add(l.text, l.marks, "leetcode_desc_block")
                 end
