@@ -184,6 +184,7 @@ function Result:handle(item)
         if status == "ac" then
             config.stats.update_streak()
         end
+        self.console.layout.side:load("submissions", true)
     end
 
     self:draw()

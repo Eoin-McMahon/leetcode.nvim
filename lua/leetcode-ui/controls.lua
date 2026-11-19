@@ -45,12 +45,34 @@ _G._leetcode_ctl = {
     submit = click(true),
 }
 
+---Render a `hint_keys` value for display: `<leader>` and `<localleader>`
+---become the configured keys, with a space shown as `␣`. The result is escaped
+---for use in a winbar.
+---@param key? string
+---@return string?
+function Controls.display_key(key)
+    if not key or key == "" then
+        return
+    end
+    local function show(lead, default)
+        lead = lead or default
+        return lead == " " and "␣" or lead
+    end
+    key = key:gsub("<[Ll]eader>", function()
+        return show(vim.g.mapleader, "\\")
+    end):gsub("<[Ll]ocal[Ll]eader>", function()
+        return show(vim.g.maplocalleader, "\\")
+    end)
+    return (key:gsub("%%", "%%%%"))
+end
+
 ---@param key? string
 local function key_label(key)
-    if not key or key == "" then
+    local shown = Controls.display_key(key)
+    if not shown then
         return ""
     end
-    return (" %%#leetcode_ctl_key#%s"):format((key:gsub("%%", "%%%%")))
+    return (" %%#leetcode_ctl_key#%s"):format(shown)
 end
 
 ---@param q lc.ui.Question
@@ -75,9 +97,9 @@ end
 ---@param q lc.ui.Question
 function Controls.build(q)
     local parts = {
-        button(q, "run", "▶", "Run"),
+        button(q, "run", config.icons.run, "Run"),
         "  ",
-        button(q, "submit", "⇪", "Submit"),
+        button(q, "submit", config.icons.submit, "Submit"),
     }
 
     local extra = {}

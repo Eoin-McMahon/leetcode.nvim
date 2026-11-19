@@ -50,6 +50,7 @@ local HINT_LABELS = { side = "description", testcase = "testcase", result = "res
 ---@field panes table<lc.splits.PaneName, lc.splits.Pane>
 ---@field sizes table<string, table<lc.splits.PaneName, integer>> live sizes per preset
 ---@field console lc.splits.Console
+---@field side lc.splits.Side
 ---@field applying boolean
 ---@field status_hl? string
 ---@field status_title? string
@@ -83,6 +84,7 @@ function Layout.new(question)
                 linebreak = true,
                 colorcolumn = "",
                 foldlevel = 999,
+                conceallevel = 2,
             },
         }),
         testcase = Pane.new("testcase", {
@@ -96,6 +98,7 @@ function Layout.new(question)
     }
 
     self.console = Console.new(self, self.panes.testcase, self.panes.result)
+    self.side = require("leetcode-ui.splits.side").new(self)
     self:set_keymaps()
     self:update_winbars()
 
@@ -279,7 +282,7 @@ function Layout:set_keymaps()
         end
     end
 
-    for name in pairs(self.panes) do
+    for _, name in ipairs({ "testcase", "result" }) do
         map(name, keys.toggle, function()
             self:hide(name)
         end)
@@ -311,7 +314,6 @@ end
 ---@private
 function Layout:update_winbars()
     local keys = config.user.keys
-    self.panes.side:set_winbar(" %#leetcode_ctl_tab_active#Description%*")
     self.panes.testcase:set_winbar(
         (" %%#Title#Testcases%%*  %%#leetcode_ctl_key#%s reset  %s use result%%*"):format(
             keys.reset_testcases,
@@ -338,10 +340,10 @@ function Layout.hints(q)
     local parts = {}
     for _, name in ipairs({ "side", "testcase", "result" }) do
         if not self.panes[name].visible then
-            local key = config.user.hint_keys[name]
+            local key = Controls.display_key(config.user.hint_keys[name])
             local text = HINT_LABELS[name] .. " hidden"
             if key then
-                text = ("%s: %%#leetcode_ctl_key#%s%%*"):format(text, (key:gsub("%%", "%%%%")))
+                text = ("%s: %%#leetcode_ctl_key#%s%%*"):format(text, key)
             end
             table.insert(parts, "%#Comment#" .. text .. "%*")
         end

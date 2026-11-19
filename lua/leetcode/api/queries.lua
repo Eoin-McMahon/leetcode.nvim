@@ -44,6 +44,11 @@ queries.question = [[
                     lang_slug: langSlug
                     code
                 }
+                solution {
+                    id
+                    paidOnly
+                    canSeeDetail
+                }
                 testcase_list: exampleTestcaseList
                 meta_data: metaData
                 ac_rate: acRate

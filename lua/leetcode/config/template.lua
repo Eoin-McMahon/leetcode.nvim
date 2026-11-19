@@ -82,7 +82,8 @@ local M = {
     },
 
     ---Key labels shown in the UI next to actions, for example
-    ---`{ run = "␣lr", submit = "␣ls" }`. Display only; map the keys yourself.
+    ---`{ run = "<leader>lr", submit = "<leader>ls" }`. `<leader>` is shown as
+    ---the configured mapleader. Display only; map the keys yourself.
     ---@type table<string, string>
     hint_keys = {},
 
@@ -151,6 +152,10 @@ local M = {
         use_testcase = "U", ---@type string
         focus_testcases = "H", ---@type string
         focus_result = "L", ---@type string
+
+        tab_next = "]t", ---@type string|string[] next side pane tab
+        tab_prev = "[t", ---@type string|string[] previous side pane tab
+        back = "<BS>", ---@type string|string[] back from an opened solution
     },
 
     ---@type lc.highlights

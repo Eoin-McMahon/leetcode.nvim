@@ -366,6 +366,7 @@ function Question:mount_splits()
     description.renderer.bufnr = description.bufnr
     description:draw()
     self:watch_side_resize()
+    layout.side:prefetch()
     stop_timing()
 end
 
@@ -390,6 +391,10 @@ function Question:watch_side_resize()
                 if not side:is_open() then
                     return
                 end
+                if vim.api.nvim_win_get_buf(side.winid) ~= self.description.bufnr then
+                    self.layout.side.description_dirty = true
+                    return
+                end
                 local width = vim.api.nvim_win_get_width(side.winid)
                 if width ~= last_width then
                     last_width = width
@@ -406,6 +411,10 @@ function Question:mount()
     local tabp = utils.detect_duplicate_question(slug, config.lang)
     if tabp then
         return pcall(vim.api.nvim_set_current_tabpage, tabp)
+    end
+
+    if self.cache.paid_only and not config.auth.is_premium then
+        return log.warn(("%s %s requires LeetCode Premium"):format(config.icons.lock, self.cache.title or slug))
     end
 
     local stop_timing = timings.start("open " .. slug)
