@@ -146,6 +146,7 @@ function Question:open_buffer(existed)
 
     require("leetcode-ui.tags").attach(self.bufnr, self.winid)
     require("leetcode-ui.controls").render(self)
+    require("leetcode.command").problem_mappings(self.bufnr)
 
     if config.user.editor.fold_imports and not require("leetcode-ui.tags").hidden(self.bufnr) then
         self:editor_fold_imports(false)

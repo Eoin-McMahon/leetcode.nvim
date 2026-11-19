@@ -435,6 +435,9 @@ function Console.new(layout, pane, result_buf)
     for opt, value in pairs({ buftype = "nofile", bufhidden = "hide", swapfile = false, modifiable = false }) do
         vim.bo[self.collapsed_buf][opt] = value
     end
+    for _, bufnr in ipairs({ self.testcase_buf, self.result_buf, self.collapsed_buf }) do
+        require("leetcode.command").problem_mappings(bufnr)
+    end
     vim.api.nvim_create_autocmd("BufEnter", {
         buffer = self.collapsed_buf,
         callback = vim.schedule_wrap(function()

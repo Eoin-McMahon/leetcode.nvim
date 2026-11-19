@@ -74,6 +74,7 @@ function Side.new(layout)
     for opt, value in pairs({ buftype = "nofile", bufhidden = "hide", swapfile = false, modifiable = false }) do
         vim.bo[self.collapsed_buf][opt] = value
     end
+    require("leetcode.command").problem_mappings(self.collapsed_buf)
     vim.api.nvim_create_autocmd("BufEnter", {
         buffer = self.collapsed_buf,
         callback = vim.schedule_wrap(function()
@@ -87,6 +88,7 @@ end
 
 ---@param bufnr integer
 function Side:map_tab_keys(bufnr)
+    require("leetcode.command").problem_mappings(bufnr)
     local keys = config.user.keys
     map(bufnr, keys.tab_next, function()
         self:cycle(1)

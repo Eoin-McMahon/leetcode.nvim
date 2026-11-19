@@ -767,6 +767,7 @@ end
 ---Actions that `config.user.mappings` can bind, as `:Leet` arguments.
 cmd.mapping_actions = {
     menu = { "", "Open" },
+    home = { "menu", "Back to the LeetCode menu" },
     run = { "run", "Run" },
     submit = { "submit", "Submit" },
     debug = { "debug", "Open in debugger" },
@@ -798,14 +799,69 @@ cmd.mapping_actions = {
     code_fullscreen = { "fullscreen code", "Fullscreen code" },
 }
 
+---Actions that only make sense inside a problem. They are mapped buffer-local
+---in the problem's buffers, so they exist only there.
+cmd.problem_actions = {
+    run = true,
+    submit = true,
+    debug = true,
+    lang = true,
+    code_fullscreen = true,
+    reset_code = true,
+    yank = true,
+    last_submit = true,
+    tags = true,
+    console = true,
+    testcase = true,
+    result = true,
+    new_case = true,
+    delete_case = true,
+    reset = true,
+    add_case = true,
+    tests_fullscreen = true,
+    side = true,
+    side_fullscreen = true,
+    layout = true,
+    info = true,
+}
+
+---@param name string
+---@param opts table
+local function set_mapping(name, opts)
+    local lhs = (config.user.mappings or {})[name]
+    local action = cmd.mapping_actions[name]
+    if lhs and action then
+        vim.keymap.set("n", lhs, function()
+            vim.cmd("Leet " .. action[1])
+        end, vim.tbl_extend("force", { desc = action[2] }, opts))
+    end
+end
+
+---Global mappings: the ones that make sense anywhere.
 function cmd.setup_mappings()
-    for name, lhs in pairs(config.user.mappings or {}) do
-        local action = cmd.mapping_actions[name]
-        if lhs and action then
-            vim.keymap.set("n", lhs, function()
-                vim.cmd("Leet " .. action[1])
-            end, { desc = action[2] })
+    for name in pairs(config.user.mappings or {}) do
+        if not cmd.problem_actions[name] then
+            set_mapping(name, {})
         end
+    end
+end
+
+---Problem mappings, buffer-local to one of a problem's buffers. which-key
+---groups for them (`which_key_groups`) are registered on the same buffers, so
+---they only show inside a problem.
+---@param bufnr integer
+function cmd.problem_mappings(bufnr)
+    for name in pairs(cmd.problem_actions) do
+        set_mapping(name, { buffer = bufnr })
+    end
+    local groups = config.user.which_key_groups or {}
+    local ok, wk = pcall(require, "which-key")
+    if ok and next(groups) and wk.add then
+        local spec = {}
+        for lhs, name in pairs(groups) do
+            table.insert(spec, { lhs, group = name, buffer = bufnr })
+        end
+        pcall(wk.add, spec)
     end
 end
 

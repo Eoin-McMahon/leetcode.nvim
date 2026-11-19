@@ -85,12 +85,17 @@ local M = {
 
     ---Global keymaps, created by the plugin when it starts. Every key hint in
     ---the UI is read from here, so remapping a key here changes its hint too.
-    ---`false` or nil leaves an action unmapped. Actions: menu, run, submit,
+    ---`false` or nil leaves an action unmapped. Actions: menu, home, run, submit,
     ---debug, side, console, testcase, result, reset, add_case,
     ---layout, tags, stealth, info, list, daily, random, lang, last_submit,
     ---reset_code, yank, exit, signin, key_hints.
     ---@type table<string, string|false>
     mappings = {},
+
+    ---which-key group names for prefixes of problem mappings, for example
+    ---`{ ["<leader>lc"] = "Code" }`. Registered only on a problem's buffers.
+    ---@type table<string, string>
+    which_key_groups = {},
 
     ---Show key hints next to bar buttons. Off by default; which-key lists them.
     ---Toggle at runtime with `:Leet keys` or the `key_hints` mapping. Side panel tab letters are always shown.
