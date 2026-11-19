@@ -77,6 +77,7 @@ local M = {
     editor = {
         reset_previous_code = true, ---@type boolean
         fold_imports = true, ---@type boolean
+        hide_tags = true, ---@type boolean
     },
 
     console = {
@@ -135,8 +136,27 @@ local M = {
     ---@type lc.highlights
     theme = {},
 
+    ---Use LeetCode's own difficulty and calendar colors instead of colors
+    ---derived from the active colorscheme.
+    ---@type boolean
+    leetcode_colors = false,
+
     ---@type boolean
     image_support = false,
+
+    ---Result polling after Run and Submit, in milliseconds. LeetCode's rate
+    ---limit is unknown, so keep `fast` at 150 or above.
+    poll = {
+        fast = 200, ---@type integer
+        fast_for = 3000, ---@type integer
+        slow = 500, ---@type integer
+        slow_for = 15000, ---@type integer
+        slowest = 1000, ---@type integer
+    },
+
+    ---Record how long UI actions and API calls take. `:Leet timings` shows them.
+    ---@type boolean
+    debug_timings = false,
 }
 
 return M

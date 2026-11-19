@@ -474,6 +474,17 @@ function cmd.fold()
     q:editor_fold_imports(true)
 end
 
+function cmd.tags_toggle()
+    local q = require("leetcode.utils").curr_question()
+    if q then
+        require("leetcode-ui.tags").toggle(q.bufnr)
+    end
+end
+
+function cmd.timings()
+    require("leetcode.timings").show()
+end
+
 function cmd.get_active_session()
     local sessions = config.sessions.all
     return vim.tbl_filter(function(s)
@@ -679,6 +690,8 @@ cmd.commands = {
     restore = { cmd.restore },
     inject = { cmd.inject },
     fold = { cmd.fold },
+    timings = { cmd.timings },
+    tags = { cmd.tags_toggle },
     -- session = {
     --     change = {
     --         cmd.change_session,

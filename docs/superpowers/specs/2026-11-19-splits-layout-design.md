@@ -274,10 +274,20 @@ Rules:
 10. **Lazy requires.** New modules are required inside the functions that use
     them, so `:Leet` startup does not grow.
 
-Persistent connection: if the unit 1 timings show the TLS handshake dominates
-each poll, consider one long-lived helper process that holds a keep-alive
-connection and takes requests over stdin. That adds a dependency and is only
-worth it if the numbers say so. Decide after measuring, not before.
+Persistent connection: measured in unit 1 and rejected. A status check takes
+250 to 400 ms, of which TCP and TLS setup is about 40 ms; the rest is LeetCode's
+server. A keep-alive helper would save about 40 ms per poll.
+
+Unit 1 measurements (two-sum, Run, non-premium):
+
+| Measure                       | Before       | After        |
+| ----------------------------- | ------------ | ------------ |
+| Open question, cached         | blocking     | 35 ms        |
+| Open question, uncached       | blocking     | non-blocking |
+| Run click to result           | 2.8 to 3.1 s | about 2.75 s |
+
+Run time is dominated by the judge (about 2.3 s). LeetCode also rejects a third
+Run in quick succession ("run code too soon"), which no client change avoids.
 
 Timing log: `debug = { timings = true }` records `vim.uv.hrtime` spans for the
 actions in the table above and for each API call, and `:Leet timings` prints

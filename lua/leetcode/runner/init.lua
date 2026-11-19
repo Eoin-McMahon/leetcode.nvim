@@ -46,9 +46,11 @@ function Runner:handle(submit)
     }
 
     local judge = Judge:init()
+    local stop_timing = require("leetcode.timings").start(submit and "submit" or "run")
     local function callback(item, state, err)
         if err or item then
             self:stop()
+            stop_timing(err and "(error)" or "(result)")
         end
 
         if item then

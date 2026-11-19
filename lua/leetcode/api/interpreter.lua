@@ -42,6 +42,21 @@ end
 ---@param id string
 ---@param callback function
 function interpreter.listener(id, callback)
+    local poll = config.user.poll
+    local started = vim.uv.now()
+
+    -- Poll fast while most runs finish, then back off so long runs do not
+    -- hammer the judge.
+    local function next_interval()
+        local elapsed = vim.uv.now() - started
+        if elapsed < poll.fast_for then
+            return poll.fast
+        elseif elapsed < poll.slow_for then
+            return poll.slow
+        end
+        return poll.slowest
+    end
+
     local function listen()
         interpreter.check(id, function(item, err)
             if err then -- error
@@ -50,10 +65,8 @@ function interpreter.listener(id, callback)
                 item = interpreter:handle_item(item)
                 callback(item)
             else -- still judging
-                local intervals = config.auth.is_premium and { 450, 450 } or { 450, 900 }
-                local interval = item.sate == "STARTED" and intervals[2] or intervals[1]
                 callback(nil, item.state)
-                vim.defer_fn(listen, interval)
+                vim.defer_fn(listen, next_interval())
             end
         end)
     end

@@ -72,9 +72,12 @@ function utils.curl(method, params)
         return err and err.status >= 500 and tries > 0
     end
 
+    local stop_timing = require("leetcode.timings").start(("api %s %s"):format(method, params.endpoint))
+
     if params.callback then
         local cb = vim.schedule_wrap(params.callback)
         params.callback = function(out, _)
+            stop_timing()
             local res, err = utils.handle_res(out)
 
             if should_retry(err) then
@@ -89,6 +92,7 @@ function utils.curl(method, params)
         curl[method](url, params)
     else
         local out = curl[method](url, params)
+        stop_timing("(blocking)")
         local res, err = utils.handle_res(out)
 
         if should_retry(err) then

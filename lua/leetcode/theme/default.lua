@@ -22,10 +22,63 @@ local function hl(name)
     return highlight
 end
 
+---Mix `fg` into `bg`. `ratio` 1 is all `fg`.
+---@param fg? integer
+---@param bg? integer
+---@param ratio number
+---@return integer?
+local function blend(fg, bg, ratio)
+    if not fg then
+        return nil
+    end
+    bg = bg or (vim.o.background == "dark" and 0x000000 or 0xffffff)
+
+    local function channel(shift)
+        local a = bit.band(bit.rshift(fg, shift), 0xff)
+        local b = bit.band(bit.rshift(bg, shift), 0xff)
+        return bit.lshift(math.floor(a * ratio + b * (1 - ratio) + 0.5), shift)
+    end
+    return channel(16) + channel(8) + channel(0)
+end
+
+---Colors taken from the user's colorscheme in place of LeetCode's own.
+---@return lc.highlights
+local function from_colorscheme()
+    local bg = hl("Normal").bg
+    local ok, warn, err = hl("DiagnosticOk").fg, hl("DiagnosticWarn").fg, hl("DiagnosticError").fg
+
+    local tbl = {
+        easy = { fg = ok },
+        medium = { fg = warn },
+        hard = { fg = err },
+
+        easy_alt = { fg = blend(ok, bg, 0.3) },
+        medium_alt = { fg = blend(warn, bg, 0.3) },
+        hard_alt = { fg = blend(err, bg, 0.3) },
+
+        all_alt = { fg = blend(hl("Normal").fg, bg, 0.25) },
+        calendar_0 = { fg = blend(hl("Normal").fg, bg, 0.2) },
+    }
+    for level = 10, 100, 10 do
+        tbl["calendar_" .. level] = { fg = blend(ok, bg, 0.2 + 0.8 * level / 100) }
+    end
+
+    return tbl
+end
+
 ---@alias lc.highlights table<string, vim.api.keyset.highlight>
 
 ---@return lc.highlights
 M.get = function()
+    local config = require("leetcode.config")
+    if config.user.leetcode_colors then
+        return M.leetcode()
+    end
+    return vim.tbl_extend("force", M.leetcode(), from_colorscheme())
+end
+
+---@return lc.highlights
+M.leetcode = function()
     return {
         [""] = { fg = hl("Normal").fg },
 

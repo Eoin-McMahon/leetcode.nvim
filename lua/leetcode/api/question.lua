@@ -9,29 +9,42 @@ local question = {}
 ---@class lc.Question.Content
 ---@field content string
 
----@param title_slug string
----
----@return lc.question_res|nil
-function question.by_title_slug(title_slug)
-    local variables = {
-        titleSlug = title_slug,
-    }
-
-    local query = queries.question
-
-    local res, err = utils.query(query, variables)
-    if not res or err then
-        return log.err(err)
-    end
-
+---@param res table
+---@return lc.question_res
+local function normalize(res)
     local q = res.data.question
     q.meta_data = select(2, pcall(utils.decode, q.meta_data))
     q.stats = select(2, pcall(utils.decode, q.stats))
     if type(q.similar) == "string" then
         q.similar = utils.normalize_similar_cn(q.similar)
     end
-
     return q
+end
+
+---@param title_slug string
+---
+---@return lc.question_res|nil
+function question.by_title_slug(title_slug)
+    local res, err = utils.query(queries.question, { titleSlug = title_slug })
+    if not res or err then
+        return log.err(err)
+    end
+
+    return normalize(res)
+end
+
+---Fetch a question without blocking the editor.
+---@param title_slug string
+---@param cb fun(q?: lc.question_res, err?: lc.err)
+function question.fetch(title_slug, cb)
+    utils.query(queries.question, { titleSlug = title_slug }, {
+        callback = function(res, err)
+            if not res or err or type(res.data) ~= "table" or res.data.question == vim.NIL then
+                return cb(nil, err or { msg = "Question not found: " .. title_slug })
+            end
+            cb(normalize(res))
+        end,
+    })
 end
 
 ---@param filters? table

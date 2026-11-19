@@ -4,6 +4,8 @@ local Info = require("leetcode-ui.popup.info")
 local Object = require("nui.object")
 
 local api_question = require("leetcode.api.question")
+local question_cache = require("leetcode.cache.question")
+local timings = require("leetcode.timings")
 local utils = require("leetcode.utils")
 local ui_utils = require("leetcode-ui.utils")
 local config = require("leetcode.config")
@@ -135,7 +137,7 @@ function Question:open_buffer(existed)
     ui_utils.buf_set_opts(self.bufnr, { buflisted = true })
     ui_utils.win_set_buf(self.winid, self.bufnr, true)
 
-    vim.cmd([[match DiagnosticHint /@leet/]])
+    require("leetcode-ui.tags").attach(self.bufnr, self.winid)
 
     if config.user.editor.fold_imports then
         self:editor_fold_imports(false)
@@ -319,14 +321,65 @@ function Question:handle_mount()
     return self
 end
 
+---Open the question from the disk cache when possible, otherwise once the
+---fetch returns. The network is never waited on synchronously.
 function Question:mount()
-    local tabp = utils.detect_duplicate_question(self.cache.title_slug, config.lang)
+    local slug = self.cache.title_slug
+    local tabp = utils.detect_duplicate_question(slug, config.lang)
     if tabp then
         return pcall(vim.api.nvim_set_current_tabpage, tabp)
     end
 
-    local q = api_question.by_title_slug(self.cache.title_slug)
-    if not q or q.is_paid_only and not config.auth.is_premium then
+    local stop_timing = timings.start("open " .. slug)
+    local cached = question_cache.get(slug)
+
+    if cached then
+        self:mount_with(cached)
+        stop_timing("(cached)")
+
+        api_question.fetch(slug, function(q)
+            if q then
+                question_cache.set(slug, q)
+                self:refresh(q)
+            end
+        end)
+        return self
+    end
+
+    log.info(("Loading %s"):format(self.cache.title or slug))
+    api_question.fetch(slug, function(q, err)
+        if not q then
+            return log.err(err)
+        end
+        question_cache.set(slug, q)
+
+        if utils.detect_duplicate_question(slug, config.lang) then
+            return
+        end
+        self:mount_with(q)
+        stop_timing("(fetched)")
+    end)
+
+    return self
+end
+
+---Replace the question data with a fresher copy and redraw what shows it.
+---@param q lc.question_res
+function Question:refresh(q)
+    if not self.q or vim.deep_equal(self.q, q) then
+        return
+    end
+    self.q = q
+
+    if self.description and self.description.bufnr and vim.api.nvim_buf_is_valid(self.description.bufnr) then
+        self.description:populate()
+        self.description:draw()
+    end
+end
+
+---@param q lc.question_res
+function Question:mount_with(q)
+    if q.is_paid_only and not config.auth.is_premium then
         return log.warn("Question is for premium users only")
     end
     self.q = q
