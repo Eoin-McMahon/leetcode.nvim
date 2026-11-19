@@ -19,6 +19,9 @@ function Footer:contents()
             self:append(config.icons.star .. " ", "leetcode_medium")
         end
         self:append(config.auth.name):endl()
+    elseif self.signing_in then
+        local spinner = require("leetcode-ui.controls").SPINNER
+        self:append(spinner[self.frame or 1] .. " " .. t("Signing in"), "leetcode_alt"):endl()
     end
 
     return Footer.super.contents(self)

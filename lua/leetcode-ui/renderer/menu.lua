@@ -208,16 +208,34 @@ end
 
 function Menu:mount()
     if cookie.get() then
-        self:set_page("loading")
+        -- A saved cookie almost always still works, so show the menu at once
+        -- and check in the background: the footer fills in with your name,
+        -- or the sign-in page replaces the menu if the cookie was rejected.
+        local footer = require("leetcode-ui.lines.footer")
+        local Controls = require("leetcode-ui.controls")
+        footer.signing_in, footer.frame = true, 1
+        self:set_page("menu")
+
+        local timer = vim.uv.new_timer()
+        timer:start(Controls.SPINNER_MS, Controls.SPINNER_MS, vim.schedule_wrap(function()
+            if not footer.signing_in then
+                return
+            end
+            footer.frame = footer.frame % #Controls.SPINNER + 1
+            self:draw()
+        end))
 
         local auth_api = require("leetcode.api.auth")
         auth_api.user(function(_, err)
+            footer.signing_in = false
+            timer:stop()
+            timer:close()
             if err then
                 self:set_page("signin")
                 log.err(err)
             else
-                local cmd = require("leetcode.command")
-                cmd.start_user_session()
+                self:draw()
+                config.stats.update()
             end
         end)
     else
