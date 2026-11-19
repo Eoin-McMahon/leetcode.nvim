@@ -41,6 +41,11 @@ return function(questions, opts)
                 width = question_picker.width,
             },
         },
+        on_change = function(_, item)
+            if item and item.item and item.item.value then
+                require("leetcode.cache.question").prefetch(item.item.value.title_slug)
+            end
+        end,
         actions = {
             confirm = function(p, item)
                 if completed then

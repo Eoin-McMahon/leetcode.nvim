@@ -62,4 +62,47 @@ function QuestionCache.set(title_slug, q)
     end)
 end
 
+---@type table<string, fun(q?: lc.question_res, err?: lc.err)[]>
+local inflight = {}
+
+---Fetch a question once, however many callers ask while it is in flight, and
+---cache the result.
+---@param title_slug string
+---@param cb? fun(q?: lc.question_res, err?: lc.err)
+function QuestionCache.fetch(title_slug, cb)
+    if inflight[title_slug] then
+        if cb then
+            table.insert(inflight[title_slug], cb)
+        end
+        return
+    end
+    inflight[title_slug] = cb and { cb } or {}
+
+    require("leetcode.api.question").fetch(title_slug, function(q, err)
+        local waiting = inflight[title_slug]
+        inflight[title_slug] = nil
+        if q then
+            QuestionCache.set(title_slug, q)
+        end
+        for _, fn in ipairs(waiting) do
+            fn(q, err)
+        end
+    end)
+end
+
+local prefetch_timer
+
+---Warm the cache for a question the user is likely to open, for example the
+---one under the picker cursor. Debounced so scrolling does not fire requests.
+---@param title_slug string
+function QuestionCache.prefetch(title_slug)
+    prefetch_timer = prefetch_timer or vim.uv.new_timer()
+    prefetch_timer:stop()
+    prefetch_timer:start(150, 0, vim.schedule_wrap(function()
+        if not QuestionCache.get(title_slug) then
+            QuestionCache.fetch(title_slug)
+        end
+    end))
+end
+
 return QuestionCache

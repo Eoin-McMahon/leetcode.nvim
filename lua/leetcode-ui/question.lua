@@ -96,7 +96,13 @@ function Question:create_buffer()
     local path, existed = self:path()
     self.file_existed = existed
 
-    vim.cmd("$tabe " .. path)
+    if self.placeholder_win and vim.api.nvim_win_is_valid(self.placeholder_win) then
+        vim.api.nvim_set_current_win(self.placeholder_win)
+        vim.cmd("edit " .. vim.fn.fnameescape(path))
+        self.placeholder_win = nil
+    else
+        vim.cmd("$tabe " .. vim.fn.fnameescape(path))
+    end
     self.bufnr = vim.api.nvim_get_current_buf()
     self.winid = vim.api.nvim_get_current_win()
     ui_utils.win_set_winfixbuf(self.winid)
@@ -435,30 +441,63 @@ function Question:mount()
         self:mount_with(cached)
         stop_timing("(cached)")
 
-        api_question.fetch(slug, function(q)
+        question_cache.fetch(slug, function(q)
             if q then
-                question_cache.set(slug, q)
                 self:refresh(q)
             end
         end)
         return self
     end
 
-    log.info(("Loading %s"):format(self.cache.title or slug))
-    api_question.fetch(slug, function(q, err)
+    self:open_placeholder()
+    question_cache.fetch(slug, function(q, err)
         if not q then
+            self:close_placeholder()
             return log.err(err)
-        end
-        question_cache.set(slug, q)
-
-        if utils.detect_duplicate_question(slug, config.lang) then
-            return
         end
         self:mount_with(q)
         stop_timing("(fetched)")
     end)
 
     return self
+end
+
+---Open the question's tab at once with what the problem list already knows,
+---so the click feels instant while the full question loads.
+function Question:open_placeholder()
+    vim.cmd("$tabnew")
+    self.placeholder_win = vim.api.nvim_get_current_win()
+    local bufnr = vim.api.nvim_get_current_buf()
+    self.placeholder_buf = bufnr
+    vim.bo[bufnr].buftype = "nofile"
+    vim.bo[bufnr].bufhidden = "wipe"
+
+    local c = self.cache
+    local lines = {
+        "",
+        ("  %s. %s"):format(c.frontend_id or "", c.title or c.title_slug),
+        "  " .. (c.difficulty or ""),
+        "",
+        "  Loading…",
+    }
+    vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
+    vim.bo[bufnr].modifiable = false
+    local ns = vim.api.nvim_create_namespace("leetcode_placeholder")
+    vim.api.nvim_buf_set_extmark(bufnr, ns, 1, 0, { end_col = #lines[2], hl_group = "Title" })
+    if c.difficulty then
+        vim.api.nvim_buf_set_extmark(bufnr, ns, 2, 0, {
+            end_col = #lines[3],
+            hl_group = "leetcode_" .. c.difficulty:lower(),
+        })
+    end
+    vim.api.nvim_buf_set_extmark(bufnr, ns, 4, 0, { end_col = #lines[5], hl_group = "Comment" })
+end
+
+function Question:close_placeholder()
+    if self.placeholder_win and vim.api.nvim_win_is_valid(self.placeholder_win) then
+        pcall(vim.api.nvim_win_close, self.placeholder_win, true)
+    end
+    self.placeholder_win = nil
 end
 
 ---Replace the question data with a fresher copy and redraw what shows it.
@@ -478,7 +517,8 @@ end
 ---@param q lc.question_res
 function Question:mount_with(q)
     if q.is_paid_only and not config.auth.is_premium then
-        return log.warn("Question is for premium users only")
+        self:close_placeholder()
+        return log.warn(("%s %s requires LeetCode Premium"):format(config.icons.lock, q.title))
     end
     self.q = q
 
