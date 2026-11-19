@@ -41,6 +41,9 @@ function Menu:autocmds()
     vim.keymap.set("n", "<Esc>", function()
         self:back()
     end, { buffer = self.bufnr, nowait = true, desc = "Back" })
+    vim.keymap.set("n", "g?", function()
+        require("leetcode-ui.help").open()
+    end, { buffer = self.bufnr, desc = "LeetCode keys" })
 
     api.nvim_create_autocmd("WinResized", {
         group = group_id,

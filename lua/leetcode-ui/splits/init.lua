@@ -372,6 +372,13 @@ function Layout:fullscreen(name)
     self:refresh_bars()
 end
 
+function Layout:focus_code()
+    local win = self.question.winid
+    if win and vim.api.nvim_win_is_valid(win) then
+        vim.api.nvim_set_current_win(win)
+    end
+end
+
 function Layout:refresh_bars()
     self.side:rerender()
     self.side:render_winbar()

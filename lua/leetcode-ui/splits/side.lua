@@ -259,6 +259,10 @@ function Side:set_collapsed(collapsed)
     self.collapsed = collapsed
     self.layout:show("side")
     self.layout:apply()
+    -- Leave the collapsed strip, or entering it would expand it again.
+    if collapsed then
+        self.layout:focus_code()
+    end
 end
 
 function Side:toggle()
@@ -269,9 +273,9 @@ function Side:toggle()
     self:set_collapsed(not self.collapsed)
 end
 
----The collapsed column, like an activity bar: an expand chevron, then each
----tab's icon with a blank row between, the active one marked with an accent
----bar and highlighted. No keys; which-key lists them.
+---The collapsed column, like an activity bar: each tab's icon with a blank row
+---between, the active one marked with an accent bar and highlighted. Clicking
+---or entering the column expands it.
 function Side:render_collapsed()
     local bufnr = self.collapsed_buf
     local ns = vim.api.nvim_create_namespace("leetcode_side_collapsed")
@@ -285,10 +289,6 @@ function Side:render_collapsed()
     vim.bo[bufnr].modifiable = false
     vim.api.nvim_buf_clear_namespace(bufnr, ns, 0, -1)
 
-    vim.api.nvim_buf_set_extmark(bufnr, ns, 0, 0, {
-        virt_text = { { "  " .. config.icons.collapse_right, "leetcode_ctl_key" } },
-        virt_text_pos = "overlay",
-    })
     for i, tab in ipairs(tabs) do
         local icon = config.icons.tabs[tab] or config.icons.tabs.submission
         local active = tab == self.active

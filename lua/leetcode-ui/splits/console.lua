@@ -500,6 +500,9 @@ function Console:set_collapsed(collapsed)
     self.collapsed = collapsed
     self.layout:show("console")
     self.layout:apply()
+    if collapsed then
+        self.layout:focus_code()
+    end
 end
 
 ---Collapse or expand; shows the panel first if it was hidden.

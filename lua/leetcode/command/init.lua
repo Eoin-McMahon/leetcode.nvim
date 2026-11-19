@@ -946,6 +946,9 @@ function cmd.problem_mappings(bufnr)
     for name in pairs(cmd.problem_actions) do
         set_mapping(name, { buffer = bufnr })
     end
+    vim.keymap.set("n", "g?", function()
+        require("leetcode-ui.help").open()
+    end, { buffer = bufnr, desc = "LeetCode keys" })
     local groups = config.user.which_key_groups or {}
     local ok, wk = pcall(require, "which-key")
     if ok and next(groups) and wk.add then
@@ -991,6 +994,11 @@ cmd.commands = {
     timings = { cmd.timings },
     tags = { cmd.tags_toggle },
     stealth = { cmd.stealth_toggle },
+    help = {
+        function()
+            require("leetcode-ui.help").open()
+        end,
+    },
     home = { cmd.home },
     tab = {
         description = { cmd.tab_toggle("description") },
