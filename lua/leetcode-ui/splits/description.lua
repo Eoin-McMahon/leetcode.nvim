@@ -261,15 +261,13 @@ local function wrap(segs, width, first, rest)
     local line = { text = first, marks = {} }
     local used = vim.api.nvim_strwidth(first)
     local prefix_width = vim.api.nvim_strwidth(rest)
-    for _, w in ipairs(words) do
-        local word = w.text
-        local ww = vim.api.nvim_strwidth(vim.trim(word))
-        if used + ww > width and used > prefix_width then
-            line.text = line.text:gsub("%s+$", "")
-            table.insert(lines, line)
-            line = { text = rest, marks = {} }
-            used = prefix_width
-        end
+    local function newline()
+        line.text = line.text:gsub("%s+$", "")
+        table.insert(lines, line)
+        line = { text = rest, marks = {} }
+        used = prefix_width
+    end
+    local function place(word, w)
         local col = #line.text
         line.text = line.text .. word
         used = used + vim.api.nvim_strwidth(word)
@@ -282,6 +280,43 @@ local function wrap(segs, width, first, rest)
             else
                 table.insert(line.marks, { col = col, end_col = col + #vim.trim(word), hl = w.hl, seg = w.seg })
             end
+        end
+    end
+    -- Never narrower than 8 columns past the indent, so cutting always
+    -- makes progress.
+    width = math.max(width, prefix_width + 8)
+    local max = width - prefix_width
+    for _, w in ipairs(words) do
+        local word = w.text
+        local ww = vim.api.nvim_strwidth(vim.trim(word))
+        if ww <= max then
+            if used + ww > width and used > prefix_width then
+                newline()
+            end
+            place(word, w)
+        else
+            -- A word longer than a whole line, like `[["bat"],["nat","tan"]]`,
+            -- is cut so the window never soft-wraps it, after a comma when
+            -- there is one in the second half of the piece.
+            local remaining = word
+            if width - used < 8 and used > prefix_width then
+                newline()
+            end
+            while vim.api.nvim_strwidth(vim.trim(remaining)) > width - used do
+                local room = math.max(width - used, 1)
+                local piece = vim.fn.strcharpart(remaining, 0, room)
+                local comma = piece:match(".*(),")
+                if comma and comma > room / 2 then
+                    piece = piece:sub(1, comma)
+                end
+                if piece == "" then
+                    piece = vim.fn.strcharpart(remaining, 0, 1)
+                end
+                place(piece, w)
+                remaining = remaining:sub(#piece + 1)
+                newline()
+            end
+            place(remaining, w)
         end
     end
     line.text = line.text:gsub("%s+$", "")
@@ -481,7 +516,8 @@ function Render.render(q, win_width)
     end
     add(pills, marks)
     add("")
-    add(PAD .. ("─"):rep(width), { { col = #PAD, end_col = #PAD + width * 3, hl = "leetcode_desc_rule" } })
+    local rule = width - #PAD
+    add(PAD .. ("─"):rep(rule), { { col = #PAD, end_col = #PAD + rule * 3, hl = "leetcode_desc_rule" } })
     add("")
 
     local prev, prev_li_lines = nil, 0
@@ -639,6 +675,10 @@ function Render.render(q, win_width)
             local ok, problem = pcall(problemlist.get_by_title_slug, s.title_slug)
             local id = ok and type(problem) == "table" and problem.frontend_id or nil
             local line = ("%s● %s%s"):format(PAD, id and (id .. ". ") or "", s.title)
+            -- One row per problem, since the row is the link: cut long titles.
+            if vim.api.nvim_strwidth(line) > width then
+                line = vim.fn.strcharpart(line, 0, width - 1) .. "…"
+            end
             add(line, { { col = #PAD, end_col = #PAD + #"●", hl = "leetcode_" .. (s.difficulty or "easy"):lower() } })
             out.problems[#out.lines] = s.title_slug
         end
