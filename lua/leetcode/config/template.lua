@@ -183,7 +183,7 @@ local M = {
     ---@type boolean
     image_support = false,
 
-    debug = {
+    debugger = {
         ---Python with debugpy. nil tries Mason's debugpy, then `python3`.
         python = nil, ---@type string?
     },

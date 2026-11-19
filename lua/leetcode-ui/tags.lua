@@ -88,7 +88,9 @@ function Tags.refresh(bufnr)
     if hidden_until > 0 then
         for _, winid in ipairs(vim.fn.win_findbuf(bufnr)) do
             vim.api.nvim_win_call(winid, function()
-                pcall(vim.cmd, ("silent! 1,%dfoldopen!"):format(hidden_until))
+                if vim.fn.foldclosed(1) ~= -1 then
+                    pcall(vim.cmd, ("silent! 1,%dfoldopen!"):format(hidden_until))
+                end
             end)
         end
     end

@@ -17,7 +17,7 @@ local function harness_path()
     return vim.uv.fs_stat(path) and path or nil
 end
 
----A Python that can import debugpy: `debug.python`, then Mason's debugpy, then
+---A Python that can import debugpy: `debugger.python`, then Mason's debugpy, then
 ---`python3` on PATH.
 ---@return string?
 local found_python
@@ -29,7 +29,7 @@ local function debugpy_python()
     local candidates = vim.tbl_filter(function(python)
         return python ~= nil and python ~= ""
     end, {
-        config.user.debug.python or "",
+        config.user.debugger.python or "",
         vim.fn.stdpath("data") .. "/mason/packages/debugpy/venv/bin/python",
         vim.fn.exepath("python3"),
     })
