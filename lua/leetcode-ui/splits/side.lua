@@ -163,7 +163,7 @@ function Side:premium_message(tab)
     self.locked[tab] = true
     self:set_lines(
         tab,
-        { "", ("  %s  %s requires LeetCode Premium"):format(config.icons.lock, LABELS[tab]) },
+        { "", ("  %s requires LeetCode Premium"):format(LABELS[tab]) },
         { { row = 1, hl = "leetcode_medium" } }
     )
     self:render_winbar()
@@ -184,15 +184,9 @@ function Side:render_winbar()
         if key then
             label = ("%s (%s)"):format(label, Controls.display_key(key_text(key)))
         end
-        if self.locked[tab] and not config.auth.is_premium then
-            label = label .. " " .. config.icons.lock
-        end
         table.insert(parts, ("%%%d@v:lua._leetcode_ctl.tab@%%#%s# %s %%X%%*"):format(i, hl, label))
     end
-    local hide = Controls.display_key(config.user.mappings.side)
-    if hide then
-        table.insert(parts, ("%%=%%#leetcode_ctl_key#%s %s %%*"):format(config.icons.hide, hide))
-    end
+    table.insert(parts, ("%%=%%@v:lua._leetcode_ctl.hide_side@%%#leetcode_ctl_key# %s %%X%%*"):format(config.icons.hide))
     self.layout.panes.side:set_winbar(table.concat(parts, ""))
 end
 

@@ -13,11 +13,12 @@ local timings = require("leetcode.timings")
 ---@field size fun(): number fraction of the tab, or of the parent for nested panes
 ---@field nested? boolean
 
-local function side_width()
-    return config.user.splits.side.width
-end
-local function console_size()
-    return config.user.splits.console.size
+---@param preset string
+---@param pane "side"|"console"
+local function size(preset, pane)
+    return function()
+        return config.user.splits.presets[preset][pane]
+    end
 end
 
 ---Panes open in order, each relative to its parent window, so the website
@@ -25,12 +26,12 @@ end
 ---@type table<string, lc.splits.Entry[]>
 local PRESETS = {
     website = {
-        { pane = "side", dir = "left", parent = "code", size = side_width },
-        { pane = "console", dir = "below", parent = "code", size = console_size },
+        { pane = "side", dir = "left", parent = "code", size = size("website", "side") },
+        { pane = "console", dir = "below", parent = "code", size = size("website", "console") },
     },
     wide = {
-        { pane = "side", dir = "left", parent = "code", size = side_width },
-        { pane = "console", dir = "right", parent = "code", size = console_size },
+        { pane = "side", dir = "left", parent = "code", size = size("wide", "side") },
+        { pane = "console", dir = "right", parent = "code", size = size("wide", "console") },
     },
 }
 

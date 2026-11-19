@@ -438,7 +438,7 @@ function Question:mount()
     end
 
     if self.cache.paid_only and not config.auth.is_premium then
-        return log.warn(("%s %s requires LeetCode Premium"):format(config.icons.lock, self.cache.title or slug))
+        return log.warn(("%s requires LeetCode Premium"):format(self.cache.title or slug))
     end
 
     local stop_timing = timings.start("open " .. slug)
@@ -527,7 +527,7 @@ end
 function Question:mount_with(q)
     if q.is_paid_only and not config.auth.is_premium then
         self:close_placeholder()
-        return log.warn(("%s %s requires LeetCode Premium"):format(config.icons.lock, q.title))
+        return log.warn(("%s requires LeetCode Premium"):format(q.title))
     end
     self.q = q
 

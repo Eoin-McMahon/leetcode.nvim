@@ -104,10 +104,12 @@ local M = {
 
     splits = {
         preset = "website", ---@type "website"|"wide"
-        side = { width = 0.4 }, ---@type { width: number } fraction of the tab
-        console = {
-            size = 0.35, ---@type number height in "website", width in "wide"
-            result_ratio = 0.5, ---@type number result share of the console
+        ---Default sizes as fractions of the tab. website: side width and test
+        ---panel height. wide: side and test panel widths. Dragged sizes are
+        ---kept while the question is open.
+        presets = {
+            website = { side = 0.35, console = 0.35 },
+            wide = { side = 0.30, console = 0.25 },
         },
     },
 

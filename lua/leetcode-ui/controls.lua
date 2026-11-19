@@ -56,6 +56,18 @@ _G._leetcode_ctl = {
         end
     end,
 
+    hide_side = function()
+        local q = question_at_mouse()
+        if q and q.layout then
+            q.layout:hide("side")
+        end
+    end,
+    hide_console = function()
+        local q = question_at_mouse()
+        if q and q.layout then
+            q.layout:hide("console")
+        end
+    end,
     add_case = function()
         local q = question_at_mouse()
         if q then

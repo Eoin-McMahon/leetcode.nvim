@@ -381,8 +381,8 @@ function Console:set_status(hl, title)
     self:render_winbar()
 end
 
----Tabs like the side pane (`icon (key)`, active one named), then the test
----case actions and the hide key on the right.
+---Tabs like the side pane (icon, active one named), then the test case
+---actions and hide on the right. No key hints here: which-key lists them.
 function Console:render_winbar()
     local parts = { " " }
     for i, tab in ipairs(TABS) do
@@ -392,10 +392,6 @@ function Console:render_winbar()
         if active then
             label = label .. " " .. LABELS[tab]
         end
-        local key = Controls.display_key(config.user.mappings[tab])
-        if key then
-            label = ("%s (%s)"):format(label, key)
-        end
         if tab == "result" and self.status_title then
             label = ("%s %%#%s#%s"):format(label, self.status_hl or hl, (vim.trim(self.status_title):gsub("%%", "%%%%")))
         end
@@ -403,12 +399,9 @@ function Console:render_winbar()
     end
 
     table.insert(parts, "%=")
-    table.insert(parts, Controls.button("reset", config.icons.reset, "leetcode_ctl_action", "reset"))
-    table.insert(parts, Controls.button("add_case", config.icons.add, "leetcode_ctl_action", "add_case"))
-    local hide = Controls.display_key(config.user.mappings.console)
-    if hide then
-        table.insert(parts, ("%%#leetcode_ctl_key# %s %s %%*"):format(config.icons.hide, hide))
-    end
+    table.insert(parts, ("%%@v:lua._leetcode_ctl.reset@%%#leetcode_ctl_action# %s %%X%%*"):format(config.icons.reset))
+    table.insert(parts, ("%%@v:lua._leetcode_ctl.add_case@%%#leetcode_ctl_action# %s %%X%%*"):format(config.icons.add))
+    table.insert(parts, ("%%@v:lua._leetcode_ctl.hide_console@%%#leetcode_ctl_key# %s %%X%%*"):format(config.icons.hide))
     self.pane:set_winbar(table.concat(parts, ""))
 end
 

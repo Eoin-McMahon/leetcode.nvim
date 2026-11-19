@@ -11,7 +11,7 @@ local icons = {
     reset = "\u{f0e2}",
     debug = "\u{f188}",
     image = "\u{f02e9}",
-    hide = "\u{f104}",
+    hide = "\u{f00d}",
     console_tabs = { testcase = "\u{f0349}", result = "\u{f0c8b}" },
     tabs = {
         description = "\u{f0219}",
@@ -56,7 +56,7 @@ icons.plain = {
     reset = "↺",
     debug = "◉",
     image = "▣",
-    hide = "<",
+    hide = "×",
     console_tabs = { testcase = "⌕", result = "☑" },
     tabs = { description = "▤", editorial = "✎", solutions = "☰", submissions = "✓" },
     add = "+",
