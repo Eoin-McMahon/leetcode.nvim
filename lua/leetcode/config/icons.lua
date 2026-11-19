@@ -54,6 +54,35 @@ icons.hl = {
 
 icons.indent = ("\t%s "):format(icons.bar)
 
+---Icons for mapped actions, used in which-key. Same glyphs as the bars.
+icons.actions = {
+    menu = "\u{f015}",
+    run = icons.run,
+    submit = icons.submit,
+    debug = icons.debug,
+    code_fullscreen = icons.fullscreen,
+    tests_fullscreen = icons.fullscreen,
+    side_fullscreen = icons.fullscreen,
+    reset_code = icons.reset,
+    reset = icons.reset,
+    last_submit = icons.tabs.submissions,
+    new_case = icons.write,
+    testcase = icons.console_tabs.testcase,
+    result = icons.console_tabs.result,
+    console = icons.collapse_down,
+    side = icons.tabs.description,
+    layout = "\u{f0e8f}",
+    lang = "\u{f121}",
+    list = icons.console_tabs.testcase,
+    recent = icons.tabs.submissions,
+    random = "\u{f074}",
+    daily = "\u{f073}",
+    stealth = "\u{f070}",
+    key_hints = "\u{f11c}",
+    signin = "\u{f090}",
+    exit = "\u{f08b}",
+}
+
 ---Replacements for terminals without a Nerd Font (`nerd_font = false`).
 icons.plain = {
     circle = "●",

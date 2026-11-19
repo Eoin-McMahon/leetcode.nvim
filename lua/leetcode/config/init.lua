@@ -64,6 +64,13 @@ function config.setup()
 
     config.debug = config.user.debug or false ---@diagnostic disable-line
     config.lang = config.user.lang
+    if config.user.sticky_lang then
+        -- The last language chosen in a problem, kept across sessions.
+        local ok, saved = pcall(vim.fn.readfile, config.user.storage.cache .. "/lang")
+        if ok and saved[1] and saved[1] ~= "" then
+            config.lang = saved[1]
+        end
+    end
 
     config.storage.home = P:new(config.user.storage.home) ---@diagnostic disable-line
     config.storage.home:mkdir()

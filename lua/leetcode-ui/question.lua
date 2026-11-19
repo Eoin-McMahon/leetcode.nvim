@@ -665,6 +665,10 @@ Question.change_lang = vim.schedule_wrap(function(self, lang)
 
         vim.api.nvim_set_option_value("buflisted", false, { buf = old_bufnr })
         self:open_buffer(existed)
+        if config.user.sticky_lang then
+            config.lang = lang
+            pcall(vim.fn.writefile, { lang }, config.storage.cache:joinpath("lang"):absolute())
+        end
 
         if not loaded then
             utils.exec_hooks("question_enter", self)

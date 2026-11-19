@@ -107,6 +107,11 @@ local M = {
     ---@type string?
     leader_label = nil,
 
+    ---Remember the last language chosen in a problem and open the next
+    ---problem in it, across sessions. Off: always start with `lang`.
+    ---@type boolean
+    sticky_lang = true,
+
     ---Close the open question when another one is opened. Unsaved code is
     ---saved first; reopening restores it from the file or the website draft.
     ---@type boolean

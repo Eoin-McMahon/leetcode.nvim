@@ -30,6 +30,44 @@ function cmd.problems(options)
     picker.question(p, options)
 end
 
+---Close every open problem and show the menu. Unsaved problems are listed in
+---one prompt: save them, discard them, or cancel.
+function cmd.home()
+    local questions = vim.list_slice(_Lc_state.questions)
+    local unsaved = vim.tbl_filter(function(q)
+        return q.bufnr and api.nvim_buf_is_valid(q.bufnr) and vim.bo[q.bufnr].modified
+    end, questions)
+    if #unsaved > 0 then
+        local names = table.concat(vim.tbl_map(function(q)
+            return ("%s. %s"):format(q.q.frontend_id, q.q.title)
+        end, unsaved), ", ")
+        local choice = vim.fn.confirm(("Unsaved changes in %s."):format(names), "&Save\n&Discard\n&Cancel", 3)
+        if choice == 3 or choice == 0 then
+            return
+        end
+        for _, q in ipairs(unsaved) do
+            if choice == 1 then
+                api.nvim_buf_call(q.bufnr, function()
+                    pcall(vim.cmd, "silent write")
+                end)
+            else
+                vim.bo[q.bufnr].modified = false
+            end
+        end
+    end
+    for _, q in ipairs(questions) do
+        if q.winid and api.nvim_win_is_valid(q.winid) then
+            local tabp = api.nvim_win_get_tabpage(q.winid)
+            if #api.nvim_list_tabpages() > 1 then
+                pcall(vim.cmd.tabclose, api.nvim_tabpage_get_number(tabp))
+            else
+                q:unmount()
+            end
+        end
+    end
+    cmd.menu()
+end
+
 function cmd.recent()
     require("leetcode.utils").auth_guard()
     local questions = require("leetcode.cache.recent").questions()
@@ -769,8 +807,7 @@ end
 
 ---Actions that `config.user.mappings` can bind, as `:Leet` arguments.
 cmd.mapping_actions = {
-    menu = { "", "Open" },
-    home = { "menu", "Back to the LeetCode menu" },
+    menu = { "home", "LeetCode menu (closes problems)" },
     run = { "run", "Run tests" },
     submit = { "submit", "Submit" },
     debug = { "debug", "Open in debugger" },
@@ -839,6 +876,17 @@ local function set_mapping(name, opts)
             vim.cmd("Leet " .. action[1])
         end, vim.tbl_extend("force", { desc = action[2] }, opts))
     end
+
+    -- Give which-key the same icon the UI uses, instead of its guess.
+    local icon = config.user.nerd_font and config.icons.actions[name]
+    local ok, wk = pcall(require, "which-key")
+    if icon and ok and wk.add then
+        local spec = {}
+        for _, key in ipairs(type(lhs) == "table" and lhs or { lhs }) do
+            table.insert(spec, { key, icon = { icon = icon, hl = "leetcode_menu_icon" }, buffer = opts.buffer })
+        end
+        pcall(wk.add, spec)
+    end
 end
 
 ---Global mappings: the ones that make sense anywhere.
@@ -903,6 +951,7 @@ cmd.commands = {
     timings = { cmd.timings },
     tags = { cmd.tags_toggle },
     stealth = { cmd.stealth_toggle },
+    home = { cmd.home },
     fullscreen = {
         side = { cmd.fullscreen("side") },
         tests = { cmd.fullscreen("tests") },
