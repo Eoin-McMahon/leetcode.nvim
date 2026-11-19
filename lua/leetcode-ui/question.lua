@@ -441,6 +441,10 @@ function Question:mount()
         return log.warn(("%s requires LeetCode Premium"):format(self.cache.title or slug))
     end
 
+    if config.user.single_question then
+        self:close_others()
+    end
+
     local stop_timing = timings.start("open " .. slug)
     local cached = question_cache.get(slug)
 
@@ -467,6 +471,28 @@ function Question:mount()
     end)
 
     return self
+end
+
+---Close every other open question, saving unsaved code first (which also
+---syncs the draft). Reopening one restores its code from the file or draft.
+function Question:close_others()
+    for _, other in ipairs(vim.list_slice(_Lc_state.questions)) do
+        if other ~= self then
+            if other.bufnr and vim.api.nvim_buf_is_valid(other.bufnr) and vim.bo[other.bufnr].modified then
+                vim.api.nvim_buf_call(other.bufnr, function()
+                    pcall(vim.cmd, "silent write")
+                end)
+            end
+            if other.winid and vim.api.nvim_win_is_valid(other.winid) then
+                local tabp = vim.api.nvim_win_get_tabpage(other.winid)
+                if #vim.api.nvim_list_tabpages() > 1 then
+                    pcall(vim.cmd.tabclose, vim.api.nvim_tabpage_get_number(tabp))
+                else
+                    other:unmount()
+                end
+            end
+        end
+    end
 end
 
 ---Open the question's tab at once with what the problem list already knows,

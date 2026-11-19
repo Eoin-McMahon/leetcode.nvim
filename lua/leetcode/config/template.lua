@@ -102,6 +102,11 @@ local M = {
     ---@type string?
     leader_label = nil,
 
+    ---Close the open question when another one is opened. Unsaved code is
+    ---saved first; reopening restores it from the file or the website draft.
+    ---@type boolean
+    single_question = true,
+
     ---"classic" keeps the floating console. "splits" opens description, code,
     ---testcase and result as real windows.
     ---@type "classic"|"splits"
