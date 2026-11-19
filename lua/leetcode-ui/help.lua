@@ -5,7 +5,7 @@ local config = require("leetcode.config")
 local Help = {}
 
 local GROUPS = {
-    { "Code", { "run", "submit", "debug", "last_submit", "reset_code", "lang", "fullscreen" } },
+    { "Code", { "run", "submit", "debug", "last_submit", "reset_code", "lang", "assist", "fullscreen" } },
     { "Tests", { "console", "new_case", "testcase", "reset", "result", "add_case" } },
     {
         "Left panel",

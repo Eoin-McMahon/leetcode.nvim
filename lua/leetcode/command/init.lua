@@ -866,6 +866,7 @@ cmd.mapping_actions = {
     key_hints = { "keys", "Toggle key hints" },
     side_fullscreen = { "fullscreen side", "Fullscreen description panel" },
     fullscreen = { "fullscreen", "Toggle fullscreen" },
+    assist = { "assist", "Toggle editor help (LSP, completion)" },
     tab_description = { "tab description", "Toggle description" },
     tab_editorial = { "tab editorial", "Toggle editorial" },
     tab_solutions = { "tab solutions", "Toggle solutions" },
@@ -877,6 +878,7 @@ cmd.mapping_actions = {
 ---Actions that only make sense inside a problem. They are mapped buffer-local
 ---in the problem's buffers, so they exist only there.
 cmd.problem_actions = {
+    assist = true,
     fullscreen = true,
     tab_description = true,
     tab_editorial = true,
@@ -994,6 +996,14 @@ cmd.commands = {
     timings = { cmd.timings },
     tags = { cmd.tags_toggle },
     stealth = { cmd.stealth_toggle },
+    assist = {
+        function()
+            local q = require("leetcode.utils").curr_question()
+            if q then
+                require("leetcode.assist").toggle(q)
+            end
+        end,
+    },
     help = {
         function()
             require("leetcode-ui.help").open()

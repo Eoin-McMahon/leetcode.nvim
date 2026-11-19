@@ -348,6 +348,7 @@ end
 
 ---@param item lc.interpreter_response
 function Result:handle(item)
+    require("leetcode.assist").mark_error(self.console.question, item)
     self.item = item
     self.case_idx = 1
     -- Open on the first failing case, like the website.

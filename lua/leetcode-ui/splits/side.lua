@@ -324,6 +324,7 @@ end
 ---the list of earlier submissions.
 ---@param item table
 function Side:show_submission(item)
+    require("leetcode.assist").mark_error(self.question, item)
     self.latest = item
     self.viewing = nil
     self:select("submissions")

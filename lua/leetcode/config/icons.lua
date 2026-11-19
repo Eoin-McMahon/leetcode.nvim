@@ -57,6 +57,7 @@ icons.indent = ("\t%s "):format(icons.bar)
 ---Icons for mapped actions, used in which-key. Same glyphs as the bars.
 icons.actions = {
     menu = "\u{f015}",
+    assist = "\u{f0eb}",
     fullscreen = icons.fullscreen,
     tab_description = icons.tabs.description,
     tab_editorial = icons.tabs.editorial,
