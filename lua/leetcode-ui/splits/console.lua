@@ -50,7 +50,9 @@ function Testcase:by_id(id)
 end
 
 function Testcase:populate()
-    local lines = {}
+    -- A blank first row, so the cursor starts on empty space instead of
+    -- covering the first value. Blank rows are ignored when running.
+    local lines = { "" }
     local t_list = self.console.question.q.testcase_list
     self.testcase_len = #vim.split(t_list[1] or "", "\n")
 
@@ -151,7 +153,7 @@ function Testcase:append(input)
     local s = vim.split(input, "\n", { trimempty = true })
     local bufnr = self:bufnr()
     local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, true)
-    if #lines > 1 or (#lines == 1 and lines[1] ~= "") then
+    if vim.trim(table.concat(lines)) ~= "" then
         vim.api.nvim_buf_set_lines(bufnr, -1, -1, false, { "", unpack(s) })
     else
         vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, s)

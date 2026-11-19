@@ -344,14 +344,27 @@ function Layout:fullscreen(name)
 
     local bufs = name == "side" and vim.tbl_values(self.side.bufs)
         or { self.console.testcase_buf, self.console.result_buf }
+    -- Winbar click regions do not fire in floating windows, so a click near the
+    -- restore icon at the right of the bar is caught here.
+    local function click()
+        local m = vim.fn.getmousepos()
+        if pane:is_fullscreen() and m.winid == pane.float and m.winrow == 1 then
+            if m.wincol >= vim.api.nvim_win_get_width(pane.float) - 6 then
+                return pane:exit_fullscreen()
+            end
+        end
+        vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<LeftMouse>", true, false, true), "n", false)
+    end
     for _, bufnr in ipairs(bufs) do
         vim.keymap.set("n", "<Esc>", function()
             pane:exit_fullscreen()
         end, { buffer = bufnr, nowait = true, desc = "Leave fullscreen" })
+        vim.keymap.set("n", "<LeftMouse>", click, { buffer = bufnr, desc = "Leave fullscreen from the bar" })
     end
     pane:enter_fullscreen(function()
         for _, bufnr in ipairs(bufs) do
             pcall(vim.keymap.del, "n", "<Esc>", { buffer = bufnr })
+            pcall(vim.keymap.del, "n", "<LeftMouse>", { buffer = bufnr })
         end
         self:refresh_bars()
     end)
