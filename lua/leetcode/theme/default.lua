@@ -94,6 +94,11 @@ M.description = function(tbl)
         desc_rule = { fg = hl("WinSeparator").fg or hl("Comment").fg },
         desc_block = { bg = blend(normal.fg, bg, 0.07) },
         pill = { fg = hl("Comment").fg },
+        chip_active = { fg = normal.fg, bg = blend(normal.fg, bg, 0.16), bold = true },
+        result_ok = { fg = hl("DiagnosticOk").fg, bold = true },
+        result_err = { fg = hl("DiagnosticError").fg, bold = true },
+        block_ok = { bg = blend(hl("DiagnosticOk").fg, bg, 0.12) },
+        block_err = { bg = blend(hl("DiagnosticError").fg, bg, 0.12) },
     }
     for _, level in ipairs({ "easy", "medium", "hard" }) do
         local fg = tbl[level] and tbl[level].fg

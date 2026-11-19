@@ -1,5 +1,4 @@
 local Controls = require("leetcode-ui.controls")
-local ResultLayout = require("leetcode-ui.renderer.result")
 local Runner = require("leetcode.runner")
 local problemlist = require("leetcode.cache.problemlist")
 local config = require("leetcode.config")
@@ -79,41 +78,49 @@ function Testcase:param_names()
     end, md.params)
 end
 
+---Label each value with its parameter (`list1 = `) inline, mark where each case
+---starts, and shade the values, like the website's test case editor. The
+---buffer text stays the raw input, so editing it works as before.
 function Testcase:draw_extmarks()
     local bufnr = self:bufnr()
     vim.api.nvim_buf_clear_namespace(bufnr, EXTMARK_NS, 0, -1)
 
     local md = self.console.question.q.meta_data
+    local params = type(md) == "table" and md.params or {}
     local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+    local width = 0
+    for _, p in ipairs(params) do
+        width = math.max(width, #p.name)
+    end
 
-    if config.user.console.testcase.virt_text and type(md) == "table" and md.params then
-        local pad = "  "
-        local j, invalid = 1, false
-        for i, line in ipairs(lines) do
-            if lines[i - 1] == "" and line == "" then
-                invalid = true
+    local j, case, invalid = 1, 0, false
+    for i, line in ipairs(lines) do
+        if lines[i - 1] == "" and line == "" then
+            invalid = true
+        end
+        if line ~= "" then
+            if j == 1 then
+                case = case + 1
+                vim.api.nvim_buf_set_extmark(bufnr, EXTMARK_NS, i - 1, 0, {
+                    virt_text = { { ("Case %d"):format(case), "leetcode_desc_dim" } },
+                    virt_text_pos = "right_align",
+                })
             end
-
-            if line ~= "" then
-                local param = md.params[j]
-                local text
-                if param and not invalid then
-                    text = {
-                        { pad },
-                        { config.icons.param, "Operator" },
-                        { " " },
-                        { param.name, "Comment" },
-                        { " " },
-                        { param.type, "Type" },
-                    }
-                else
-                    text = { { pad }, { (" %s"):format(t("invalid")), "leetcode_error" } }
-                end
-                vim.api.nvim_buf_set_extmark(bufnr, EXTMARK_NS, i - 1, 0, { virt_text = text })
-                j = j + 1
+            local param = params[j]
+            local text
+            if param and not invalid then
+                text = { { ("  %s = "):format(param.name .. (" "):rep(width - #param.name)), "leetcode_desc_dim" } }
             else
-                j = 1
+                text = { { ("  %s "):format(t("invalid")), "leetcode_error" } }
             end
+            vim.api.nvim_buf_set_extmark(bufnr, EXTMARK_NS, i - 1, 0, {
+                virt_text = text,
+                virt_text_pos = "inline",
+                line_hl_group = "leetcode_desc_block",
+            })
+            j = j + 1
+        else
+            j = 1
         end
     end
 
@@ -127,7 +134,7 @@ function Testcase:draw_extmarks()
                     ("  Add your own case: a blank line, then one line each for %s"):format(
                         names ~= "" and names or "the inputs"
                     ),
-                    "Comment",
+                    "leetcode_desc_dim",
                 },
             },
         },
@@ -156,52 +163,104 @@ function Testcase:focus()
     self.console:select("testcase", true)
 end
 
----Result buffer for the splits layout, drawn by the plugin's result renderer.
+---Result buffer for the splits layout, drawn like the description panel.
 ---@class lc.splits.Result
 ---@field console lc.splits.Console
----@field renderer lc.ui.Result
+---@field item? table last run or submit response
+---@field case_idx integer
 ---@field last_testcase? string
 local Result = {}
 Result.__index = Result
 
-function Result:target()
-    local console = self.console
-    local pane = console.pane
-    local shown = pane:is_open() and vim.api.nvim_win_get_buf(pane.winid) == console.result_buf
-    return { bufnr = console.result_buf, winid = shown and pane.winid or nil }
+local RESULT_NS = vim.api.nvim_create_namespace("leetcode_result")
+
+function Result:width()
+    local pane = self.console.pane
+    if pane:is_open() then
+        return vim.api.nvim_win_get_width(pane.winid)
+    end
+    return 80
 end
 
-function Result:map(...)
-    self.renderer.bufnr = self.console.result_buf
-    self.renderer:map(...)
+---@param lines string[]
+---@param out? lc.desc.Output
+function Result:write(lines, out)
+    local bufnr = self.console.result_buf
+    vim.bo[bufnr].modifiable = true
+    vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
+    vim.bo[bufnr].modifiable = false
+    vim.api.nvim_buf_clear_namespace(bufnr, RESULT_NS, 0, -1)
+    for _, m in ipairs(out and out.marks or {}) do
+        pcall(vim.api.nvim_buf_set_extmark, bufnr, RESULT_NS, m.row, m.col, {
+            end_col = math.min(m.end_col, #lines[m.row + 1]),
+            hl_group = m.hl,
+        })
+    end
+    for _, l in ipairs(out and out.line_hls or {}) do
+        vim.api.nvim_buf_set_extmark(bufnr, RESULT_NS, l.row, 0, { line_hl_group = l.hl })
+    end
 end
 
 function Result:draw()
-    self.renderer:draw(self:target())
+    if not self.item then
+        return
+    end
+    local item = self.item
+    local testcases = self.console.testcase:by_id(item.submission_id)
+    local md = self.console.question.q.meta_data
+    local params = type(md) == "table" and md.params or {}
+    local out, count = require("leetcode-ui.splits.result").render(item, testcases, params, self.case_idx, self:width())
+    self:write(out.lines, out)
+
+    local bufnr = self.console.result_buf
+    for i = 1, math.min(count, 9) do
+        vim.keymap.set("n", tostring(i), function()
+            self.case_idx = i
+            self:draw()
+        end, { buffer = bufnr, nowait = true })
+    end
+end
+
+-- Kept for callers of the upstream console interface.
+function Result:map(mode, key, fn)
+    vim.keymap.set(mode, key, fn, { buffer = self.console.result_buf })
 end
 
 function Result:clear()
-    self.renderer.bufnr = self.console.result_buf
-    self.renderer:clear()
+    self.item = nil
     self.last_testcase = nil
+    self:write({})
 end
 
 ---Show a placeholder at once so a click gets feedback before the request leaves.
 ---@param submit boolean
 function Result:pending(submit)
-    local bufnr = self.console.result_buf
-    vim.bo[bufnr].modifiable = true
-    vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, { "", "  " .. (submit and "Submitting…" or "Running…") })
-    vim.bo[bufnr].modifiable = false
+    self.item = nil
+    local text = "  " .. (submit and "Submitting…" or "Running…")
+    self:write({ "", text }, { marks = { { row = 1, col = 2, end_col = #text, hl = "leetcode_desc_dim" } }, line_hls = {} })
 end
 
 ---@param item lc.interpreter_response
 function Result:handle(item)
-    self.renderer:handle_res(item)
+    self.item = item
+    self.case_idx = 1
+    -- Open on the first failing case, like the website.
+    local compare = item.compare_result
+    if type(compare) == "string" then
+        local first_fail = compare:find("0", 1, true)
+        if first_fail then
+            self.case_idx = first_fail
+        end
+    end
     self.console:set_status(item._.hl, item._.title)
 
-    if item.last_testcase then
+    if item.last_testcase and item.last_testcase ~= vim.NIL then
         self.last_testcase = item.last_testcase
+    elseif type(compare) == "string" and compare:find("0", 1, true) then
+        -- A failed run case can be added as a test too.
+        local cases = self.console.testcase:by_id(item.submission_id)
+        local failed = cases[self.case_idx]
+        self.last_testcase = failed and table.concat(failed, "\n") or nil
     end
 
     if item._.submission then
@@ -255,9 +314,7 @@ function Console.new(layout, pane, result_buf)
     }, Console)
 
     self.testcase = setmetatable({ console = self, testcases = {}, testcase_len = 0 }, Testcase)
-    self.result = setmetatable({ console = self }, Result)
-    self.result.renderer = ResultLayout(self)
-    self.result.renderer.bufnr = result_buf
+    self.result = setmetatable({ console = self, case_idx = 1 }, Result)
 
     local id = self.question.q.frontend_id
     pcall(vim.api.nvim_buf_set_name, self.testcase_buf, id .. "/Tests")
