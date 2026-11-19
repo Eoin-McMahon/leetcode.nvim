@@ -99,14 +99,71 @@ local function inline(text, base)
     return segs
 end
 
+---Treesitter language of a fence name or language slug (`py`, `python3`).
+---@param name string
+---@return string
+local function ts_lang(name)
+    name = (name or ""):lower()
+    name = LANG_ALIASES[name] or name
+    return vim.treesitter.language.get_lang(name) or name
+end
+
+---Keep only the reader's language where an article shows the same code in
+---several languages back to back (fences separated by blank lines).
+---@param md string[]
+---@param lang? string
+---@return string[]
+local function pick_language(md, lang)
+    if not lang then
+        return md
+    end
+    local out, i = {}, 1
+    while i <= #md do
+        if md[i]:match("^%s*```") then
+            -- Collect the run of fences.
+            local blocks, j = {}, i
+            while j <= #md and md[j]:match("^%s*```") do
+                local fence = md[j]:match("^%s*```%s*([%w%+#_%-]*)")
+                local block = { md[j] }
+                j = j + 1
+                while j <= #md and not md[j]:match("^%s*```") do
+                    table.insert(block, md[j])
+                    j = j + 1
+                end
+                table.insert(block, md[j])
+                j = j + 1
+                table.insert(blocks, { fence = fence, lines = block })
+                local k = j
+                while md[k] and vim.trim(md[k]) == "" do
+                    k = k + 1
+                end
+                if not (md[k] and md[k]:match("^%s*```")) then
+                    break
+                end
+                j = k
+            end
+            local mine = vim.tbl_filter(function(b)
+                return ts_lang(b.fence) == lang
+            end, blocks)
+            for _, b in ipairs(#blocks > 1 and #mine > 0 and mine or blocks) do
+                vim.list_extend(out, b.lines)
+            end
+            i = j
+        else
+            table.insert(out, md[i])
+            i = i + 1
+        end
+    end
+    return out
+end
+
 ---Treesitter highlights for a code block, per line.
 ---@param code_lines string[]
 ---@param fence string
 ---@return table<integer, { col: integer, end_col: integer, hl: string }[]> 0-based row
 local function highlight(code_lines, fence)
     local by_row = {}
-    local name = LANG_ALIASES[fence:lower()] or fence:lower()
-    local lang = vim.treesitter.language.get_lang(name) or name
+    local lang = ts_lang(fence)
     local source = table.concat(code_lines, "\n")
     local ok, parser = pcall(vim.treesitter.get_string_parser, source, lang)
     if not ok or not parser then
@@ -140,10 +197,12 @@ end
 
 ---@param md string[] markdown lines
 ---@param win_width integer
----@param opts? { subtitle?: string } a dim line under the title
+---@param opts? { subtitle?: string, lang?: string } a dim line under the title; the reader's language slug
 ---@return lc.article.Output
 function Render.render(md, win_width, opts)
     opts = opts or {}
+    local reader_lang = opts.lang and ts_lang(opts.lang)
+    md = pick_language(md, reader_lang)
     local width = math.min(win_width, MAX_WIDTH) - #PAD
     local out = { lines = {}, marks = {}, line_hls = {} }
 
@@ -154,7 +213,9 @@ function Render.render(md, win_width, opts)
             table.insert(out.marks, { row = row, col = m.col, end_col = m.end_col, hl = m.hl })
         end
         if line_hl then
-            table.insert(out.line_hls, { row = row, hl = line_hl })
+            -- Shaded blocks in articles are code: their cards span the panel
+            -- instead of the reading width.
+            table.insert(out.line_hls, { row = row, hl = line_hl, wide = true })
         end
     end
     local function blank()
@@ -168,13 +229,15 @@ function Render.render(md, win_width, opts)
         end
     end
 
-    ---A code block card: language label in the top padding row, code lines
-    ---cut at the card's text edge, wrapped parts indented under their line.
+    ---A code block card as wide as the panel, so code wraps only when a line
+    ---would not fit. The top padding row names the language when it is not
+    ---the reader's. Wrapped parts are indented under their line.
     local function code_block(fence, code_lines)
         blank()
         local inner = PAD .. "  "
-        local code_width = math.max(width - 2 - #inner, 10)
-        local label = fence ~= "" and fence or "code"
+        -- Card margins on both sides, and the inner gap on both sides.
+        local code_width = math.max(win_width - 2 * #PAD - 2 * 2, 10)
+        local label = (fence == "" or ts_lang(fence) == reader_lang) and "" or fence
         add(inner .. label, { { col = #inner, end_col = #inner + #label, hl = "leetcode_desc_dim" } }, BLOCK)
         local hls = highlight(code_lines, fence)
         for row, code in ipairs(code_lines) do

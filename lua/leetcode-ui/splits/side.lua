@@ -211,7 +211,7 @@ function Side:draw_article(tab)
         return
     end
     local width = self:width()
-    local out = require("leetcode-ui.splits.article").render(entry.md, width, { subtitle = entry.subtitle })
+    local out = require("leetcode-ui.splits.article").render(entry.md, width, { subtitle = entry.subtitle, lang = self.question.lang })
     local bufnr = self:buffer(tab)
     vim.bo[bufnr].filetype = config.name
     vim.bo[bufnr].modifiable = true
@@ -225,7 +225,7 @@ function Side:draw_article(tab)
         })
     end
     local line_hls = vim.tbl_map(function(l)
-        return { row = l.row + 1, hl = l.hl }
+        return { row = l.row + 1, hl = l.hl, wide = l.wide }
     end, out.line_hls)
     require("leetcode-ui.splits.card").apply(bufnr, NS, line_hls, width)
 end
