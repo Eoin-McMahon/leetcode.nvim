@@ -137,7 +137,7 @@ def main() -> None:
     meta = spec["meta"]
     run = _run_design if meta.get("systemdesign") else _run_function
     for number, case in enumerate(spec["cases"], start=1):
-        print(f"Case {number}")
+        print(f"Case {number}", flush=True)
         run(namespace, meta, case)
         print()
 

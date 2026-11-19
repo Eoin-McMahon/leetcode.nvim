@@ -52,8 +52,20 @@ _G._leetcode_ctl = {
     debug = function()
         local q = question_at_mouse()
         if q then
-            require("leetcode.debug").start(q)
+            require("leetcode.debug").toggle(q)
         end
+    end,
+    debug_continue = function()
+        require("leetcode.debug").step("continue")
+    end,
+    debug_over = function()
+        require("leetcode.debug").step("over")
+    end,
+    debug_into = function()
+        require("leetcode.debug").step("into")
+    end,
+    debug_out = function()
+        require("leetcode.debug").step("out")
     end,
     add_case = function()
         local q = question_at_mouse()
@@ -63,11 +75,11 @@ _G._leetcode_ctl = {
     end,
 }
 
----Render a `hint_keys` value for display, Doom/Spacemacs style: a space leader
----becomes `SPC` and keys are separated, so `<leader>lh` reads `SPC l h`. Width
----ambiguous glyphs like `␣` overlap the next character in many fonts. The
----result is escaped for use in a winbar.
----@param key? string
+---Render a mapping for display. A space leader becomes `leader_label` (the
+---Nerd space icon by default) followed by a space, since wide glyphs overlap
+---the next cell in many fonts: `<leader>lh` reads `󱁐 lh`. The result is
+---escaped for use in a winbar.
+---@param key? string|false
 ---@return string?
 function Controls.display_key(key)
     if not key or key == "" then
@@ -75,28 +87,19 @@ function Controls.display_key(key)
     end
     local function lead(value)
         value = value or "\\"
-        return value == " " and config.user.leader_label or value
+        if value ~= " " then
+            return value
+        end
+        local label = config.user.leader_label or (config.user.nerd_font and "\u{f1050}" or "SPC")
+        return label .. " "
     end
 
-    local has_leader = key:lower():find("<leader>", 1, true) or key:lower():find("<localleader>", 1, true)
-    local tokens, i = {}, 1
-    while i <= #key do
-        local special = key:match("^<[^>]+>", i)
-        if special then
-            local lower = special:lower()
-            if lower == "<leader>" then
-                special = lead(vim.g.mapleader)
-            elseif lower == "<localleader>" then
-                special = lead(vim.g.maplocalleader)
-            end
-            table.insert(tokens, special)
-            i = i + #key:match("^<[^>]+>", i)
-        else
-            table.insert(tokens, key:sub(i, i))
-            i = i + 1
-        end
-    end
-    return (table.concat(tokens, has_leader and " " or ""):gsub("%%", "%%%%"))
+    local out = key:gsub("<[Ll]ocal[Ll]eader>", function()
+        return lead(vim.g.maplocalleader)
+    end):gsub("<[Ll]eader>", function()
+        return lead(vim.g.mapleader)
+    end)
+    return (out:gsub("%%", "%%%%"))
 end
 
 ---@param key? string
@@ -112,9 +115,9 @@ end
 ---@param fn string `_G._leetcode_ctl` handler name
 ---@param icon string
 ---@param hl string
----@param key_name string `hint_keys` entry
+---@param key_name string `mappings` entry
 function Controls.button(fn, icon, hl, key_name)
-    return ("%%@v:lua._leetcode_ctl.%s@%%#%s# %s%s %%X%%*"):format(fn, hl, icon, key_label(config.user.hint_keys[key_name]))
+    return ("%%@v:lua._leetcode_ctl.%s@%%#%s# %s%s %%X%%*"):format(fn, hl, icon, key_label(config.user.mappings[key_name]))
 end
 
 ---@param q lc.ui.Question
@@ -129,6 +132,10 @@ end
 
 ---@param q lc.ui.Question
 function Controls.build(q)
+    local debug_bar = require("leetcode.debug").winbar(q)
+    if debug_bar then
+        return debug_bar
+    end
     local parts = {
         button(q, "run", config.icons.run),
         " ",
@@ -208,6 +215,8 @@ function Controls.highlights()
     vim.api.nvim_set_hl(0, "leetcode_ctl_tab", { link = "Comment", default = true })
     vim.api.nvim_set_hl(0, "leetcode_ctl_action", { link = "Special", default = true })
     vim.api.nvim_set_hl(0, "leetcode_ctl_debug", { link = "DiagnosticWarn", default = true })
+    vim.api.nvim_set_hl(0, "leetcode_debug_line", { link = "Visual", default = true })
+    vim.api.nvim_set_hl(0, "leetcode_debug_label", { link = "DiagnosticWarn", default = true })
 end
 
 return Controls

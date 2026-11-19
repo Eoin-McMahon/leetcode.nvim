@@ -116,39 +116,160 @@ local function has_breakpoints(q)
     return by_buf[q.bufnr] ~= nil and #by_buf[q.bufnr] > 0
 end
 
----Hide the LeetCode panes while dap-ui owns the screen and bring them back
----after.
+local NS = vim.api.nvim_create_namespace("leetcode_debug")
+
+---@param q lc.ui.Question
+local function clear_line(q)
+    if vim.api.nvim_buf_is_valid(q.bufnr) then
+        vim.api.nvim_buf_clear_namespace(q.bufnr, NS, 0, -1)
+    end
+end
+
+---@param q lc.ui.Question
+---@param line integer
+local function mark_line(q, line)
+    clear_line(q)
+    local d = q.debugging
+    local label = d and d.case and ("%s Case %d/%d"):format(config.icons.debug_here, d.case, d.total) or nil
+    pcall(vim.api.nvim_buf_set_extmark, q.bufnr, NS, line - 1, 0, {
+        line_hl_group = "leetcode_debug_line",
+        virt_text = label and { { "  " .. label, "leetcode_debug_label" } } or nil,
+        virt_text_pos = "eol",
+    })
+    if q.winid and vim.api.nvim_win_is_valid(q.winid) and vim.api.nvim_win_get_buf(q.winid) == q.bufnr then
+        pcall(vim.api.nvim_win_set_cursor, q.winid, { line, 0 })
+    end
+end
+
+---Make the session visible in the question tab: panes out of the way, a sign
+---column for breakpoints, the stopped line highlighted with the case number,
+---and the winbar switched to the debug bar.
 ---@param dap table
 ---@param q lc.ui.Question
-local function manage_panes(dap, q)
-    if not q.layout then
-        return
-    end
-    local restore
-    dap.listeners.after.event_initialized.leetcode = function()
-        restore = {}
-        for name, pane in pairs(q.layout.panes) do
-            restore[name] = pane.visible
-        end
-        q.layout:hide({ "side", "console" })
-    end
-    local function done()
-        if not restore then
+---@param total integer
+local function session_ui(dap, q, total)
+    local controls = require("leetcode-ui.controls")
+    local restore_panes
+    local restore_signcolumn
+
+    local function finish()
+        if not q.debugging then
             return
         end
-        local show = {}
-        for name, visible in pairs(restore) do
-            if visible then
-                table.insert(show, name)
-            end
-        end
-        restore = nil
+        q.debugging = nil
         vim.schedule(function()
-            q.layout:show(show)
+            clear_line(q)
+            if restore_signcolumn and q.winid and vim.api.nvim_win_is_valid(q.winid) then
+                vim.wo[q.winid].signcolumn = restore_signcolumn
+            end
+            if q.layout and restore_panes then
+                q.layout:show(restore_panes)
+            end
+            controls.render(q)
         end)
     end
-    dap.listeners.after.event_terminated.leetcode = done
-    dap.listeners.after.event_exited.leetcode = done
+
+    dap.listeners.after.event_initialized.leetcode = function()
+        q.debugging = { total = total }
+        if q.layout then
+            restore_panes = {}
+            for name, pane in pairs(q.layout.panes) do
+                if pane.visible then
+                    table.insert(restore_panes, name)
+                end
+            end
+            q.layout:hide({ "side", "console" })
+        end
+        if q.winid and vim.api.nvim_win_is_valid(q.winid) then
+            restore_signcolumn = vim.wo[q.winid].signcolumn
+            vim.wo[q.winid].signcolumn = "yes"
+        end
+        controls.render(q)
+    end
+    dap.listeners.after.event_output.leetcode = function(_, body)
+        local case = body.category == "stdout" and body.output:match("^Case (%d+)")
+        if case and q.debugging then
+            q.debugging.case = tonumber(case)
+            vim.schedule(function()
+                controls.render(q)
+            end)
+        end
+    end
+    dap.listeners.after.event_stopped.leetcode = function(session)
+        vim.defer_fn(function()
+            local frame = session.current_frame
+            if not (q.debugging and frame and frame.source and frame.source.path) then
+                return
+            end
+            if vim.fs.normalize(frame.source.path) == vim.fs.normalize(q.file:absolute()) then
+                mark_line(q, frame.line)
+            end
+            controls.render(q)
+        end, 50)
+    end
+    dap.listeners.after.event_continued.leetcode = function()
+        vim.schedule(function()
+            clear_line(q)
+        end)
+    end
+    dap.listeners.after.event_terminated.leetcode = finish
+    dap.listeners.after.event_exited.leetcode = finish
+    dap.listeners.after.disconnect.leetcode = finish
+end
+
+---The code winbar while debugging: case and step controls.
+---@param q lc.ui.Question
+---@return string?
+function Debug.winbar(q)
+    local d = q.debugging
+    if not d then
+        return
+    end
+    local controls = require("leetcode-ui.controls")
+    local case = d.case and ("Case %d/%d"):format(d.case, d.total) or "starting"
+    local parts = {
+        ("%%#leetcode_debug_label# %s DEBUG  %s %%*"):format(config.icons.debug, case),
+        controls.button("debug_continue", config.icons.debug_continue, "leetcode_ctl_run", "debug_continue"),
+        controls.button("debug_over", config.icons.debug_over, "leetcode_ctl_action", "debug_over"),
+        controls.button("debug_into", config.icons.debug_into, "leetcode_ctl_action", "debug_into"),
+        controls.button("debug_out", config.icons.debug_out, "leetcode_ctl_action", "debug_out"),
+        "%=",
+        controls.button("debug", config.icons.debug_stop, "leetcode_ctl_debug", "debug"),
+    }
+    return table.concat(parts, " ")
+end
+
+---Step actions for keymaps and winbar clicks.
+---@param action "continue"|"over"|"into"|"out"|"breakpoint"
+function Debug.step(action)
+    local ok, dap = pcall(require, "dap")
+    if not ok then
+        return log.error("Debugging needs nvim-dap (mfussenegger/nvim-dap)")
+    end
+    if action == "breakpoint" then
+        return dap.toggle_breakpoint()
+    end
+    if not dap.session() then
+        return log.warn("Not debugging. Start with the debug key")
+    end
+    ({ continue = dap.continue, over = dap.step_over, into = dap.step_into, out = dap.step_out })[action]()
+end
+
+---Start debugging, or stop the running session.
+---@param q lc.ui.Question
+function Debug.toggle(q)
+    if q.debugging then
+        local ok, dap = pcall(require, "dap")
+        if ok and dap.session() then
+            dap.terminate()
+        end
+        local ui_ok, dapui = pcall(require, "dapui")
+        if ui_ok then
+            pcall(dapui.close)
+        end
+        return
+    end
+    Debug.start(q)
 end
 
 ---@param q lc.ui.Question
@@ -171,11 +292,12 @@ function Debug.start(q)
     end
 
     local spec = vim.fn.tempname() .. ".json"
+    local all_cases = cases(q)
     vim.fn.writefile({
         vim.json.encode({
             solution = q.file:absolute(),
             meta = q.q.meta_data,
-            cases = cases(q),
+            cases = all_cases,
         }),
     }, spec)
 
@@ -192,7 +314,7 @@ function Debug.start(q)
         command = python,
         args = { "-m", "debugpy.adapter" },
     }
-    manage_panes(dap, q)
+    session_ui(dap, q, #all_cases)
 
     dap.run({
         type = ADAPTER,

@@ -189,7 +189,7 @@ function Side:render_winbar()
         end
         table.insert(parts, ("%%%d@v:lua._leetcode_ctl.tab@%%#%s# %s %%X%%*"):format(i, hl, label))
     end
-    local hide = Controls.display_key(config.user.hint_keys.side)
+    local hide = Controls.display_key(config.user.mappings.side)
     if hide then
         table.insert(parts, ("%%=%%#leetcode_ctl_key#%s %s %%*"):format(config.icons.hide, hide))
     end

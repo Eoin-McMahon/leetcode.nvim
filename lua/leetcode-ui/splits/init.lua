@@ -312,7 +312,7 @@ function Layout.hints(q)
     local parts = {}
     for _, name in ipairs({ "side", "console" }) do
         if not self.panes[name].visible then
-            local key = Controls.display_key(config.user.hint_keys[name])
+            local key = Controls.display_key(config.user.mappings[name])
             local text = HINT_LABELS[name] .. " hidden"
             if key then
                 text = ("%s: %%#leetcode_ctl_key#%s%%*"):format(text, key)

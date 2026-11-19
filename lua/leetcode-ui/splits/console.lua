@@ -239,7 +239,7 @@ local Console = {}
 Console.__index = Console
 
 local TABS = { "testcase", "result" }
-local LABELS = { testcase = "Testcase", result = "Test Result" }
+local LABELS = { testcase = "Tests", result = "Results" }
 
 ---@param layout lc.splits.Layout
 ---@param pane lc.splits.Pane shows the testcase buffer when created
@@ -260,8 +260,8 @@ function Console.new(layout, pane, result_buf)
     self.result.renderer.bufnr = result_buf
 
     local id = self.question.q.frontend_id
-    pcall(vim.api.nvim_buf_set_name, self.testcase_buf, id .. "/Testcase")
-    pcall(vim.api.nvim_buf_set_name, result_buf, id .. "/Test Result")
+    pcall(vim.api.nvim_buf_set_name, self.testcase_buf, id .. "/Tests")
+    pcall(vim.api.nvim_buf_set_name, result_buf, id .. "/Results")
 
     self.testcase:populate()
     vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI", "TextChangedP", "InsertLeave" }, {
@@ -313,7 +313,7 @@ function Console:render_winbar()
         if active then
             label = label .. " " .. LABELS[tab]
         end
-        local key = Controls.display_key(config.user.hint_keys[tab])
+        local key = Controls.display_key(config.user.mappings[tab])
         if key then
             label = ("%s (%s)"):format(label, key)
         end
@@ -326,7 +326,7 @@ function Console:render_winbar()
     table.insert(parts, "%=")
     table.insert(parts, Controls.button("reset", config.icons.reset, "leetcode_ctl_action", "reset"))
     table.insert(parts, Controls.button("add_case", config.icons.add, "leetcode_ctl_action", "add_case"))
-    local hide = Controls.display_key(config.user.hint_keys.console)
+    local hide = Controls.display_key(config.user.mappings.console)
     if hide then
         table.insert(parts, ("%%#leetcode_ctl_key# %s %s %%*"):format(config.icons.hide, hide))
     end

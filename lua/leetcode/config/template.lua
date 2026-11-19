@@ -83,17 +83,20 @@ local M = {
         controls = true, ---@type boolean Clickable Run and Submit in the winbar
     },
 
-    ---Key labels shown in the UI next to actions, for example
-    ---`{ run = "<leader>lr", submit = "<leader>ls" }`. `<leader>` is shown as
-    ---the configured mapleader. Display only; map the keys yourself. Known
-    ---names: run, submit, debug, side, console, testcase, result, reset, add_case.
-    ---@type table<string, string>
-    hint_keys = {},
+    ---Global keymaps, created by the plugin when it starts. Every key hint in
+    ---the UI is read from here, so remapping a key here changes its hint too.
+    ---`false` or nil leaves an action unmapped. Actions: menu, run, submit,
+    ---debug, debug_continue, debug_over, debug_into, debug_out,
+    ---debug_breakpoint, side, console, testcase, result, reset, add_case,
+    ---layout, tags, stealth, info, list, daily, random, lang, last_submit,
+    ---reset_code, yank, exit.
+    ---@type table<string, string|false>
+    mappings = {},
 
-    ---How a space leader is shown in key hints: "SPC" gives `SPC l h`. A Nerd
-    ---icon such as "󱁐" also works; some terminals draw it wider than a cell.
-    ---@type string
-    leader_label = "SPC",
+    ---How a space leader is shown in key hints. nil uses the Nerd space icon
+    ---(`󱁐 lh`) with `nerd_font`, else "SPC".
+    ---@type string?
+    leader_label = nil,
 
     ---"classic" keeps the floating console. "splits" opens description, code,
     ---testcase and result as real windows.

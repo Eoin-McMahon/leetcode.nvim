@@ -522,7 +522,14 @@ end
 function cmd.debug()
     local q = require("leetcode.utils").curr_question()
     if q then
-        require("leetcode.debug").start(q)
+        require("leetcode.debug").toggle(q)
+    end
+end
+
+---@param action "continue"|"over"|"into"|"out"|"breakpoint"
+function cmd.debug_step(action)
+    return function()
+        require("leetcode.debug").step(action)
     end
 end
 
@@ -719,6 +726,48 @@ function cmd.exec(args)
     end
 end
 
+---Actions that `config.user.mappings` can bind, as `:Leet` arguments.
+cmd.mapping_actions = {
+    menu = { "", "Open" },
+    run = { "run", "Run" },
+    submit = { "submit", "Submit" },
+    debug = { "debug", "Toggle debugging" },
+    debug_continue = { "debug continue", "Debug: continue" },
+    debug_over = { "debug over", "Debug: step over" },
+    debug_into = { "debug into", "Debug: step into" },
+    debug_out = { "debug out", "Debug: step out" },
+    debug_breakpoint = { "debug breakpoint", "Debug: toggle breakpoint" },
+    side = { "pane side", "Toggle side panel" },
+    console = { "pane console", "Toggle console" },
+    testcase = { "pane testcase", "Tests tab" },
+    result = { "pane result", "Results tab" },
+    reset = { "testcase reset", "Reset test cases" },
+    add_case = { "testcase add", "Add failed case" },
+    layout = { "layout", "Switch layout" },
+    tags = { "tags", "Toggle tags" },
+    stealth = { "stealth", "Toggle stealth" },
+    info = { "info", "Info" },
+    list = { "list", "Pick problem" },
+    daily = { "daily", "Daily problem" },
+    random = { "random", "Random problem" },
+    lang = { "lang", "Change language" },
+    last_submit = { "last_submit", "Load last submission" },
+    reset_code = { "reset", "Reset code" },
+    yank = { "yank", "Yank code" },
+    exit = { "exit", "Exit" },
+}
+
+function cmd.setup_mappings()
+    for name, lhs in pairs(config.user.mappings or {}) do
+        local action = cmd.mapping_actions[name]
+        if lhs and action then
+            vim.keymap.set("n", lhs, function()
+                vim.cmd("Leet " .. action[1])
+            end, { desc = action[2] })
+        end
+    end
+end
+
 function cmd.setup()
     api.nvim_create_user_command("Leet", cmd.exec, {
         bar = true,
@@ -753,7 +802,14 @@ cmd.commands = {
     timings = { cmd.timings },
     tags = { cmd.tags_toggle },
     stealth = { cmd.stealth_toggle },
-    debug = { cmd.debug },
+    debug = {
+        cmd.debug,
+        continue = { cmd.debug_step("continue") },
+        over = { cmd.debug_step("over") },
+        into = { cmd.debug_step("into") },
+        out = { cmd.debug_step("out") },
+        breakpoint = { cmd.debug_step("breakpoint") },
+    },
     layout = { cmd.layout_cycle },
     pane = {
         side = { cmd.pane_toggle("side") },
