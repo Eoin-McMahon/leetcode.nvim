@@ -151,11 +151,17 @@ function Side:premium_message(tab)
     self:render_winbar()
 end
 
+---Tabs as `icon (key)`, with the active one also named and highlighted:
+---`▤ Description (d)  ✎ (e)  ☰ (s)  ✓ (u)`. Fits a narrow panel.
 function Side:render_winbar()
     local parts = { " " }
     for i, tab in ipairs(TABS) do
-        local hl = tab == self.active and "leetcode_ctl_tab_active" or "leetcode_ctl_tab"
-        local label = LABELS[tab]
+        local active = tab == self.active
+        local hl = active and "leetcode_ctl_tab_active" or "leetcode_ctl_tab"
+        local label = config.icons.tabs[tab]
+        if active then
+            label = label .. " " .. LABELS[tab]
+        end
         local key = (config.user.keys.side_tabs or {})[tab]
         if key then
             label = ("%s (%s)"):format(label, Controls.display_key(key_text(key)))
@@ -167,9 +173,46 @@ function Side:render_winbar()
     end
     local hide = Controls.display_key(config.user.hint_keys.side)
     if hide then
-        table.insert(parts, ("%%=%%#leetcode_ctl_key#hide %s %%*"):format(hide))
+        table.insert(parts, ("%%=%%#leetcode_ctl_key#%s %s %%*"):format(config.icons.hide, hide))
     end
     self.layout.panes.side:set_winbar(table.concat(parts, ""))
+end
+
+---Draw the description into its tab buffer at the side pane's width.
+function Side:render_description()
+    local bufnr = self:buffer("description")
+    local pane = self.layout.panes.side
+    local width = pane:is_open() and vim.api.nvim_win_get_width(pane.winid) or self.last_width or 60
+    self.last_width = width
+
+    local out = require("leetcode-ui.splits.description").render(self.question, width)
+    vim.bo[bufnr].modifiable = true
+    vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, out.lines)
+    vim.bo[bufnr].modifiable = false
+
+    vim.api.nvim_buf_clear_namespace(bufnr, NS, 0, -1)
+    for _, m in ipairs(out.marks) do
+        pcall(vim.api.nvim_buf_set_extmark, bufnr, NS, m.row, m.col, {
+            end_col = math.min(m.end_col, #out.lines[m.row + 1]),
+            hl_group = m.hl,
+        })
+    end
+    for _, l in ipairs(out.line_hls) do
+        vim.api.nvim_buf_set_extmark(bufnr, NS, l.row, 0, { line_hl_group = l.hl })
+    end
+    self.links = out.links
+
+    if not self.links_mapped then
+        self.links_mapped = true
+        vim.keymap.set("n", "gx", function()
+            local url = self.links[vim.api.nvim_win_get_cursor(0)[1]]
+            if url then
+                vim.ui.open(url)
+            else
+                vim.cmd("normal! gx")
+            end
+        end, { buffer = bufnr, nowait = true })
+    end
 end
 
 ---@param tab lc.splits.Tab
@@ -181,8 +224,7 @@ function Side:select(tab)
 
     if tab == "description" and self.description_dirty then
         self.description_dirty = false
-        self.question.description.winid = self.layout.panes.side.winid
-        self.question.description:draw()
+        self:render_description()
     end
 
     self:load(tab)

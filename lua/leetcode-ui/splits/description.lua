@@ -1,0 +1,417 @@
+local config = require("leetcode.config")
+
+---Render a question's HTML description as plain, website-style text: a bold
+---title, a row of pills, plain body text with only code and headings styled,
+---examples in shaded blocks, images as openable links.
+local Render = {}
+
+local MAX_WIDTH = 88
+local PAD = "  "
+
+local ENTITIES = {
+    nbsp = " ",
+    lt = "<",
+    gt = ">",
+    amp = "&",
+    quot = '"',
+    apos = "'",
+    ["#39"] = "'",
+}
+
+---@param s string
+local function decode(s)
+    return (
+        s:gsub("&(#?%w+);", function(name)
+            if ENTITIES[name] then
+                return ENTITIES[name]
+            end
+            local num = name:match("^#(%d+)$")
+            if num then
+                return vim.fn.nr2char(tonumber(num))
+            end
+            local hex = name:match("^#x(%x+)$")
+            if hex then
+                return vim.fn.nr2char(tonumber(hex, 16))
+            end
+        end)
+    )
+end
+
+---@class lc.desc.Seg
+---@field text string
+---@field hl? string
+
+---@class lc.desc.Block
+---@field kind "para"|"pre"|"li"|"img"|"heading"
+---@field segs lc.desc.Seg[]
+---@field shaded? boolean
+---@field bullet? string
+---@field depth? integer
+---@field url? string
+
+---@param html string
+---@return lc.desc.Block[]
+function Render.parse(html)
+    local blocks = {}
+    local cur
+    local styles = {}
+    local in_pre = false
+    local lists = {}
+    local divs = {}
+
+    local function shaded()
+        for _, d in ipairs(divs) do
+            if d then
+                return true
+            end
+        end
+        return false
+    end
+
+    local function current_hl()
+        local hl
+        for _, s in ipairs(styles) do
+            if s == "code" then
+                hl = "leetcode_desc_code"
+            elseif (s == "strong" or s == "example") and hl ~= "leetcode_desc_code" then
+                hl = "leetcode_desc_bold"
+            elseif s == "em" and not hl then
+                hl = "leetcode_desc_italic"
+            elseif s == "a" then
+                hl = "leetcode_desc_link"
+            end
+        end
+        return hl
+    end
+
+    local function flush()
+        if cur then
+            local text = table.concat(vim.tbl_map(function(s)
+                return s.text
+            end, cur.segs))
+            if vim.trim(text) ~= "" or cur.kind == "img" then
+                table.insert(blocks, cur)
+            end
+        end
+        cur = nil
+    end
+
+    local function ensure()
+        if not cur then
+            cur = { kind = "para", segs = {}, shaded = shaded() }
+        end
+    end
+
+    local function append(text, hl)
+        ensure()
+        table.insert(cur.segs, { text = text, hl = hl or current_hl() })
+    end
+
+    local pos = 1
+    while pos <= #html do
+        local s, e, closing, name, attrs = html:find("<(/?)([%w]+)([^>]*)>", pos)
+        local text = html:sub(pos, (s or #html + 1) - 1)
+        if text ~= "" then
+            text = decode(text)
+            if in_pre then
+                append(text)
+            else
+                text = text:gsub("%s+", " ")
+                if not (text == " " and not cur) then
+                    append(text)
+                end
+            end
+        end
+        if not s then
+            break
+        end
+        pos = e + 1
+        name = name:lower()
+        local open = closing == ""
+
+        if name == "p" then
+            flush()
+        elseif name == "div" then
+            flush()
+            if open then
+                table.insert(divs, attrs:find("example%-block") ~= nil)
+            else
+                table.remove(divs)
+            end
+        elseif name == "pre" then
+            flush()
+            in_pre = open
+            if open then
+                cur = { kind = "pre", segs = {}, shaded = true }
+            end
+        elseif name == "ul" or name == "ol" then
+            flush()
+            if open then
+                table.insert(lists, { ordered = name == "ol", n = 0 })
+            else
+                table.remove(lists)
+            end
+        elseif name == "li" then
+            flush()
+            if open then
+                local list = lists[#lists] or { ordered = false, n = 0 }
+                list.n = list.n + 1
+                cur = {
+                    kind = "li",
+                    segs = {},
+                    bullet = list.ordered and (list.n .. ".") or "•",
+                    depth = math.max(#lists, 1),
+                    shaded = shaded(),
+                }
+            end
+        elseif name == "br" then
+            append("\n")
+        elseif name == "img" then
+            flush()
+            table.insert(blocks, { kind = "img", segs = {}, url = attrs:match('src="([^"]+)"') })
+        elseif name == "sup" or name == "sub" then
+            if open then
+                append(name == "sup" and "^" or "_")
+            end
+        elseif name == "strong" or name == "b" or name == "em" or name == "i" or name == "code" or name == "a" then
+            local style = (name == "b" and "strong") or (name == "i" and "em") or name
+            if style == "strong" and attrs:find('class="example"') then
+                style = "example"
+            end
+            if open then
+                table.insert(styles, style)
+            else
+                for i = #styles, 1, -1 do
+                    if styles[i] == style or (style == "strong" and styles[i] == "example") then
+                        table.remove(styles, i)
+                        break
+                    end
+                end
+            end
+        end
+    end
+    flush()
+
+    -- "Example 1:", "Constraints:", "Follow-up:" paragraphs become headings.
+    for _, b in ipairs(blocks) do
+        if b.kind == "para" and #b.segs > 0 then
+            local text = vim.trim(table.concat(vim.tbl_map(function(s)
+                return s.text
+            end, b.segs)))
+            local all_bold = vim.iter(b.segs):all(function(seg)
+                return seg.hl == "leetcode_desc_bold" or vim.trim(seg.text) == ""
+            end)
+            if all_bold and text:match(":$") then
+                b.kind = "heading"
+                b.segs = { { text = text:gsub(":$", ""), hl = "leetcode_desc_heading" } }
+            end
+        end
+    end
+
+    return blocks
+end
+
+---Greedy word wrap that keeps per-segment highlights.
+---@param segs lc.desc.Seg[]
+---@param width integer
+---@param first string prefix of the first line
+---@param rest string prefix of continuation lines
+---@return { text: string, marks: { col: integer, end_col: integer, hl: string }[] }[]
+local function wrap(segs, width, first, rest)
+    local words = {}
+    for _, seg in ipairs(segs) do
+        -- A segment that starts with a space ends the previous word.
+        if seg.text:match("^%s") and #words > 0 and not words[#words].text:match("%s$") then
+            words[#words].text = words[#words].text .. " "
+        end
+        for piece in seg.text:gmatch("%S+%s*") do
+            table.insert(words, { text = piece, hl = seg.hl })
+        end
+    end
+
+    local lines = {}
+    local line = { text = first, marks = {} }
+    local used = vim.api.nvim_strwidth(first)
+    local prefix_width = vim.api.nvim_strwidth(rest)
+    for _, w in ipairs(words) do
+        local word = w.text
+        local ww = vim.api.nvim_strwidth(vim.trim(word))
+        if used + ww > width and used > prefix_width then
+            line.text = line.text:gsub("%s+$", "")
+            table.insert(lines, line)
+            line = { text = rest, marks = {} }
+            used = prefix_width
+        end
+        local col = #line.text
+        line.text = line.text .. word
+        used = used + vim.api.nvim_strwidth(word)
+        if w.hl then
+            table.insert(line.marks, { col = col, end_col = col + #vim.trim(word), hl = w.hl })
+        end
+    end
+    line.text = line.text:gsub("%s+$", "")
+    table.insert(lines, line)
+    return lines
+end
+
+---@param n number
+local function short(n)
+    n = tonumber(n) or 0
+    if n >= 1e6 then
+        return ("%.1fM"):format(n / 1e6)
+    elseif n >= 1e3 then
+        return ("%.1fk"):format(n / 1e3)
+    end
+    return tostring(n)
+end
+
+---@class lc.desc.Output
+---@field lines string[]
+---@field marks { row: integer, col: integer, end_col: integer, hl: string }[]
+---@field line_hls { row: integer, hl: string }[]
+---@field links table<integer, string> 1-based row to URL
+
+---@param q lc.ui.Question
+---@param win_width integer
+---@return lc.desc.Output
+function Render.render(q, win_width)
+    local width = math.min(win_width, MAX_WIDTH) - #PAD
+    local out = { lines = {}, marks = {}, line_hls = {}, links = {} }
+
+    local function add(text, marks, line_hl)
+        table.insert(out.lines, text)
+        local row = #out.lines - 1
+        for _, m in ipairs(marks or {}) do
+            table.insert(out.marks, { row = row, col = m.col, end_col = m.end_col, hl = m.hl })
+        end
+        if line_hl then
+            table.insert(out.line_hls, { row = row, hl = line_hl })
+        end
+    end
+    local function blank()
+        if out.lines[#out.lines] ~= "" then
+            add("")
+        end
+    end
+    local function in_block()
+        local last = out.line_hls[#out.line_hls]
+        return last ~= nil and last.row == #out.lines - 1
+    end
+    -- Shaded blocks get a padding row above and below, then a blank line.
+    local function open_block()
+        if not in_block() then
+            add(PAD, nil, "leetcode_desc_block")
+        end
+    end
+    local function close_block()
+        if in_block() then
+            add(PAD, nil, "leetcode_desc_block")
+            add("")
+        end
+    end
+
+    local data = q.q
+    add("")
+    local title = ("%s%s. %s"):format(PAD, data.frontend_id, data.title)
+    add(title, { { col = #PAD, end_col = #title, hl = "leetcode_desc_title" } })
+    add("")
+
+    local pills, marks = PAD, {}
+    local function pill(text, hl)
+        if #pills > #PAD then
+            pills = pills .. "  "
+        end
+        table.insert(marks, { col = #pills, end_col = #pills + #text, hl = hl })
+        pills = pills .. text
+    end
+    pill(" " .. data.difficulty .. " ", "leetcode_pill_" .. data.difficulty:lower())
+    if q.cache.status == "ac" then
+        pill(config.icons.status.ac .. " Solved", "leetcode_ok")
+    end
+    if type(data.stats) == "table" and data.stats.acRate then
+        pill(data.stats.acRate .. " accepted", "leetcode_pill")
+    end
+    pill(short(data.likes) .. " likes", "leetcode_pill")
+    if type(data.hints) == "table" and #data.hints > 0 then
+        pill(("%d hint%s"):format(#data.hints, #data.hints == 1 and "" or "s"), "leetcode_pill")
+    end
+    add(pills, marks)
+    add("")
+    add(PAD .. ("─"):rep(width), { { col = #PAD, end_col = #PAD + width * 3, hl = "leetcode_desc_rule" } })
+    add("")
+
+    for _, b in ipairs(Render.parse(data.content or "")) do
+        if not b.shaded and b.kind ~= "pre" then
+            close_block()
+        end
+        if b.kind == "heading" then
+            blank()
+            local text = PAD .. b.segs[1].text
+            add(text, { { col = #PAD, end_col = #text, hl = "leetcode_desc_heading" } })
+        elseif b.kind == "img" then
+            local text = ("%s%s image  (gx to open)"):format(PAD, config.icons.image)
+            add(text, { { col = #PAD, end_col = #text, hl = "leetcode_desc_dim" } })
+            out.links[#out.lines] = b.url
+        elseif b.kind == "pre" then
+            -- Rebuild per line so bold labels ("Input:") keep their style.
+            local seg_lines, current = {}, {}
+            for _, seg in ipairs(b.segs) do
+                local parts = vim.split(seg.text, "\n", { plain = true })
+                for i, part in ipairs(parts) do
+                    if i > 1 then
+                        table.insert(seg_lines, current)
+                        current = {}
+                    end
+                    if part ~= "" then
+                        table.insert(current, { text = part, hl = seg.hl })
+                    end
+                end
+            end
+            table.insert(seg_lines, current)
+            while #seg_lines > 0 and #seg_lines[1] == 0 do
+                table.remove(seg_lines, 1)
+            end
+            while #seg_lines > 0 and #seg_lines[#seg_lines] == 0 do
+                table.remove(seg_lines)
+            end
+            close_block()
+            open_block()
+            for _, segs in ipairs(seg_lines) do
+                for _, l in ipairs(wrap(segs, width - 2, PAD .. "  ", PAD .. "    ")) do
+                    add(l.text, l.marks, "leetcode_desc_block")
+                end
+            end
+            close_block()
+        elseif b.kind == "li" then
+            local indent = PAD .. ("  "):rep((b.depth or 1) - 1)
+            local first = indent .. b.bullet .. " "
+            if b.shaded then
+                open_block()
+            end
+            for _, l in ipairs(wrap(b.segs, width, first, indent .. (" "):rep(vim.api.nvim_strwidth(b.bullet) + 1))) do
+                table.insert(l.marks, 1, { col = #indent, end_col = #indent + #b.bullet, hl = "leetcode_desc_dim" })
+                add(l.text, l.marks, b.shaded and "leetcode_desc_block" or nil)
+            end
+        else
+            local inner = PAD .. (b.shaded and "  " or "")
+            local lines = wrap(b.segs, width - (b.shaded and 2 or 0), inner, inner)
+            if b.shaded then
+                open_block()
+            end
+            for _, l in ipairs(lines) do
+                add(l.text, l.marks, b.shaded and "leetcode_desc_block" or nil)
+            end
+            if not b.shaded then
+                add("")
+            end
+        end
+    end
+
+    close_block()
+    while out.lines[#out.lines] == "" do
+        table.remove(out.lines)
+    end
+    return out
+end
+
+return Render

@@ -377,11 +377,10 @@ function Question:mount_splits()
         return description
     end
 
+    description.toggle_stats = function() end
     layout:apply()
     description.winid = layout.panes.side.winid
-    description:populate()
-    description.renderer.bufnr = description.bufnr
-    description:draw()
+    layout.side:render_description()
     self:watch_side_resize()
     layout.side:prefetch()
     stop_timing()
@@ -415,8 +414,7 @@ function Question:watch_side_resize()
                 local width = vim.api.nvim_win_get_width(side.winid)
                 if width ~= last_width then
                     last_width = width
-                    self.description.winid = side.winid
-                    self.description:draw()
+                    self.layout.side:render_description()
                 end
             end))
         end,
@@ -508,7 +506,9 @@ function Question:refresh(q)
     end
     self.q = q
 
-    if self.description and self.description.bufnr and vim.api.nvim_buf_is_valid(self.description.bufnr) then
+    if self.layout then
+        self.layout.side:render_description()
+    elseif self.description and self.description.bufnr and vim.api.nvim_buf_is_valid(self.description.bufnr) then
         self.description:populate()
         self.description:draw()
     end

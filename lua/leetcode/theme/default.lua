@@ -71,10 +71,35 @@ end
 ---@return lc.highlights
 M.get = function()
     local config = require("leetcode.config")
-    if config.user.leetcode_colors then
-        return M.leetcode()
+    local tbl = config.user.leetcode_colors and M.leetcode() or vim.tbl_extend("force", M.leetcode(), from_colorscheme())
+    return vim.tbl_extend("force", tbl, M.description(tbl))
+end
+
+---Groups for the splits description: plain text, with only the title,
+---headings, code and pills styled.
+---@param tbl lc.highlights
+---@return lc.highlights
+M.description = function(tbl)
+    local normal = hl("Normal")
+    local bg = normal.bg
+    local code_fg = hl("@markup.raw").fg or hl("String").fg
+    local out = {
+        desc_title = { fg = normal.fg, bold = true },
+        desc_heading = { fg = normal.fg, bold = true },
+        desc_bold = { fg = normal.fg, bold = true },
+        desc_italic = { italic = true },
+        desc_code = { fg = code_fg, bg = blend(normal.fg, bg, 0.1) },
+        desc_link = { fg = hl("Function").fg, underline = true },
+        desc_dim = { fg = hl("Comment").fg },
+        desc_rule = { fg = hl("WinSeparator").fg or hl("Comment").fg },
+        desc_block = { bg = blend(normal.fg, bg, 0.07) },
+        pill = { fg = hl("Comment").fg },
+    }
+    for _, level in ipairs({ "easy", "medium", "hard" }) do
+        local fg = tbl[level] and tbl[level].fg
+        out["pill_" .. level] = { fg = fg, bg = blend(fg, bg, 0.2), bold = true }
     end
-    return vim.tbl_extend("force", M.leetcode(), from_colorscheme())
+    return out
 end
 
 ---@return lc.highlights
