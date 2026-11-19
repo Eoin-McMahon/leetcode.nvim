@@ -78,6 +78,7 @@ local M = {
         reset_previous_code = true, ---@type boolean
         fold_imports = true, ---@type boolean
         hide_tags = true, ---@type boolean
+        sync_on_save = true, ---@type boolean Push the code to LeetCode's synced draft on `:w`, like Cmd-S on the website
         load_draft = true, ---@type boolean Load the website's autosaved draft (Firefox and Zen)
         controls = true, ---@type boolean Clickable Run and Submit in the winbar
     },

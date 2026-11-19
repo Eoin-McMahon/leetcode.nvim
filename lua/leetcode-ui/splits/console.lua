@@ -259,6 +259,10 @@ function Console.new(layout, pane, result_buf)
     self.result.renderer = ResultLayout(self)
     self.result.renderer.bufnr = result_buf
 
+    local id = self.question.q.frontend_id
+    pcall(vim.api.nvim_buf_set_name, self.testcase_buf, id .. "/Testcase")
+    pcall(vim.api.nvim_buf_set_name, result_buf, id .. "/Test Result")
+
     self.testcase:populate()
     vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI", "TextChangedP", "InsertLeave" }, {
         buffer = self.testcase_buf,

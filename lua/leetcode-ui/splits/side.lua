@@ -67,6 +67,7 @@ function Side.new(layout)
     }, Side)
 
     self:map_tab_keys(layout.panes.side.bufnr)
+    self:name_buffer("description", layout.panes.side.bufnr)
     self:render_winbar()
     return self
 end
@@ -109,7 +110,24 @@ function Side:buffer(tab)
     end
     self:map_tab_keys(bufnr)
     self.bufs[tab] = bufnr
+    self:name_buffer(tab, bufnr)
     return bufnr
+end
+
+---Readable buffer names (`21/Editorial`) instead of `[Scratch]` in the
+---statusline and tabline.
+---@param tab string
+---@param bufnr integer
+function Side:name_buffer(tab, bufnr)
+    pcall(vim.api.nvim_buf_set_name, bufnr, ("%s/%s"):format(self.question.q.frontend_id, LABELS[tab] or tab))
+end
+
+function Side:destroy()
+    for _, bufnr in pairs(self.bufs) do
+        if vim.api.nvim_buf_is_valid(bufnr) then
+            pcall(vim.api.nvim_buf_delete, bufnr, { force = true })
+        end
+    end
 end
 
 ---@param tab lc.splits.Tab

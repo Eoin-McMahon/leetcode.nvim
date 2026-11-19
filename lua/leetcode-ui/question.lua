@@ -309,6 +309,15 @@ end
 
 local group = vim.api.nvim_create_augroup("leetcode_questions", { clear = true })
 function Question:autocmds()
+    vim.api.nvim_create_autocmd("BufWritePost", {
+        group = group,
+        buffer = self.bufnr,
+        callback = function()
+            if config.user.editor.sync_on_save then
+                require("leetcode.api.sync").push(self)
+            end
+        end,
+    })
     vim.api.nvim_create_autocmd("WinClosed", {
         group = group,
         pattern = tostring(self.winid),

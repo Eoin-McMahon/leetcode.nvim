@@ -336,6 +336,7 @@ function Layout:unmount()
         end
     end
     self.console:destroy()
+    self.side:destroy()
 end
 
 Layout.PRESETS = PRESETS

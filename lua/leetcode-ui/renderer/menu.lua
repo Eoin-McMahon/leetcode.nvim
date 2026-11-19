@@ -208,6 +208,10 @@ function Menu:mount()
 end
 
 function Menu:_mount()
+    -- A name instead of `[Scratch]` in the tabline and statusline.
+    if vim.fn.bufname(self.bufnr) == "" then
+        pcall(api.nvim_buf_set_name, self.bufnr, "LeetCode")
+    end
     self:apply_options()
     self:autocmds()
     self:draw()
