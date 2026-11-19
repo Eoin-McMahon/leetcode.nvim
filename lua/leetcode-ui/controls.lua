@@ -119,6 +119,9 @@ _G._leetcode_ctl = {
 ---@param key? string|false
 ---@return string?
 function Controls.display_key(key)
+    if type(key) == "table" then
+        key = key[1]
+    end
     if not key or key == "" then
         return
     end

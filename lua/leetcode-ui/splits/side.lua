@@ -410,9 +410,17 @@ function Side:render_description()
         vim.api.nvim_buf_set_extmark(bufnr, NS, l.row, 0, { line_hl_group = l.hl })
     end
     self.links = out.links
+    self.problems = out.problems or {}
 
     if not self.links_mapped then
         self.links_mapped = true
+        map(bufnr, config.user.keys.confirm, function()
+            local slug = self.problems[vim.api.nvim_win_get_cursor(0)[1]]
+            local problem = slug and require("leetcode.cache.problemlist").get_by_title_slug(slug)
+            if problem then
+                require("leetcode-ui.question")(problem):mount()
+            end
+        end)
         vim.keymap.set("n", "gx", function()
             local url = self.links[vim.api.nvim_win_get_cursor(0)[1]]
             if url then

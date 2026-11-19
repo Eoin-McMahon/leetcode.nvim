@@ -393,6 +393,9 @@ function cmd.reset()
         return
     end
 
+    if vim.fn.confirm("Clear your code back to the starter code?", "&Clear\n&Cancel", 2) ~= 1 then
+        return
+    end
     q:editor_reset_code()
 end
 
@@ -768,18 +771,18 @@ end
 cmd.mapping_actions = {
     menu = { "", "Open" },
     home = { "menu", "Back to the LeetCode menu" },
-    run = { "run", "Run" },
+    run = { "run", "Run tests" },
     submit = { "submit", "Submit" },
     debug = { "debug", "Open in debugger" },
-    side = { "pane side", "Toggle side panel" },
-    console = { "pane console", "Toggle console" },
-    testcase = { "pane testcase", "Tests tab" },
+    side = { "pane side", "Toggle description panel" },
+    console = { "pane console", "Toggle tests" },
+    testcase = { "pane testcase", "Open tests" },
     result = { "pane result", "Results tab" },
     reset = { "testcase reset", "Reset test cases" },
     add_case = { "testcase add", "Add failed case" },
-    new_case = { "testcase new", "Write a test case" },
+    new_case = { "testcase new", "Write test case" },
     delete_case = { "testcase delete", "Delete test case" },
-    layout = { "layout", "Switch layout" },
+    layout = { "layout", "Toggle layout" },
     tags = { "tags", "Toggle tags" },
     stealth = { "stealth", "Toggle stealth" },
     info = { "info", "Info" },
@@ -789,13 +792,13 @@ cmd.mapping_actions = {
     random = { "random", "Random problem" },
     lang = { "lang", "Change language" },
     last_submit = { "last_submit", "Load last submission" },
-    reset_code = { "reset", "Reset code" },
+    reset_code = { "reset", "Clear code" },
     yank = { "yank", "Yank code" },
     exit = { "exit", "Exit" },
     signin = { "cookie browser", "Sign in again" },
     key_hints = { "keys", "Toggle key hints" },
-    side_fullscreen = { "fullscreen side", "Fullscreen side panel" },
-    tests_fullscreen = { "fullscreen tests", "Fullscreen test panel" },
+    side_fullscreen = { "fullscreen side", "Fullscreen description panel" },
+    tests_fullscreen = { "fullscreen tests", "Fullscreen tests" },
     code_fullscreen = { "fullscreen code", "Fullscreen code" },
 }
 
@@ -808,30 +811,31 @@ cmd.problem_actions = {
     lang = true,
     code_fullscreen = true,
     reset_code = true,
-    yank = true,
     last_submit = true,
-    tags = true,
     console = true,
     testcase = true,
     result = true,
     new_case = true,
-    delete_case = true,
     reset = true,
     add_case = true,
     tests_fullscreen = true,
     side = true,
     side_fullscreen = true,
     layout = true,
-    info = true,
 }
 
+---A mapping may list several keys for one action (run is both "run tests"
+---and "run" in the code group). Hints show the first.
 ---@param name string
 ---@param opts table
 local function set_mapping(name, opts)
     local lhs = (config.user.mappings or {})[name]
     local action = cmd.mapping_actions[name]
-    if lhs and action then
-        vim.keymap.set("n", lhs, function()
+    if not (lhs and action) then
+        return
+    end
+    for _, key in ipairs(type(lhs) == "table" and lhs or { lhs }) do
+        vim.keymap.set("n", key, function()
             vim.cmd("Leet " .. action[1])
         end, vim.tbl_extend("force", { desc = action[2] }, opts))
     end

@@ -205,6 +205,9 @@ function Testcase:delete_case(row)
             if idx <= examples then
                 return log.warn("Example cases cannot be deleted. Reset restores them")
             end
+            if vim.fn.confirm(("Delete Case %d?"):format(idx), "&Delete\n&Cancel", 2) ~= 1 then
+                return
+            end
             local bufnr = self:bufnr()
             vim.api.nvim_buf_set_lines(bufnr, r.first - 2, r.last, false, {})
             self:draw_extmarks()
@@ -447,6 +450,19 @@ function Console.new(layout, pane, result_buf)
     })
 
     self.testcase:populate()
+
+    -- Enter on the first row of one of your cases deletes it (after asking);
+    -- elsewhere Enter behaves as usual.
+    vim.keymap.set("n", "<CR>", function()
+        local row = vim.api.nvim_win_get_cursor(0)[1]
+        local examples = #(self.question.q.testcase_list or {})
+        for idx, r in ipairs(self.testcase:case_rows()) do
+            if r.first == row and idx > examples then
+                return self.testcase:delete_case(row)
+            end
+        end
+        vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<CR>", true, false, true), "n", false)
+    end, { buffer = self.testcase_buf })
 
     -- A click on a custom case's X deletes it; other clicks behave as usual.
     vim.keymap.set("n", "<LeftMouse>", function()

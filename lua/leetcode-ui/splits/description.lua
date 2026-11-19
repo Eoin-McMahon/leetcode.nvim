@@ -473,6 +473,41 @@ function Render.render(q, win_width)
     end
 
     close_block()
+
+    -- Footer, replacing the old info popup: topics, then similar problems.
+    out.problems = {}
+    local topics = vim.tbl_map(function(tag)
+        return tag.name
+    end, type(data.topic_tags) == "table" and data.topic_tags or {})
+    if #topics > 0 then
+        blank()
+        add(PAD .. "Topics", { { col = #PAD, end_col = #PAD + 6, hl = "leetcode_desc_heading" } })
+        local line, marks = PAD, {}
+        for _, name in ipairs(topics) do
+            local pill = " " .. name .. " "
+            if vim.api.nvim_strwidth(line .. pill) > width + #PAD then
+                add(line, marks)
+                line, marks = PAD, {}
+            end
+            table.insert(marks, { col = #line, end_col = #line + #pill, hl = "leetcode_chip_active" })
+            line = line .. pill .. " "
+        end
+        add(line, marks)
+    end
+    local similar = type(data.similar) == "table" and data.similar or {}
+    if #similar > 0 then
+        blank()
+        add(PAD .. "Similar problems", { { col = #PAD, end_col = #PAD + 16, hl = "leetcode_desc_heading" } })
+        local problemlist = require("leetcode.cache.problemlist")
+        for _, s in ipairs(vim.list_slice(similar, 1, 10)) do
+            local ok, problem = pcall(problemlist.get_by_title_slug, s.title_slug)
+            local id = ok and type(problem) == "table" and problem.frontend_id or nil
+            local line = ("%s● %s%s"):format(PAD, id and (id .. ". ") or "", s.title)
+            add(line, { { col = #PAD, end_col = #PAD + #"●", hl = "leetcode_" .. (s.difficulty or "easy"):lower() } })
+            out.problems[#out.lines] = s.title_slug
+        end
+    end
+
     while out.lines[#out.lines] == "" do
         table.remove(out.lines)
     end
