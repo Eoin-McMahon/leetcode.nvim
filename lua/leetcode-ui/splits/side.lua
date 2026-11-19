@@ -584,9 +584,7 @@ function Side:render_submissions()
             hl_group = m.hl,
         })
     end
-    for _, l in ipairs(line_hls) do
-        vim.api.nvim_buf_set_extmark(bufnr, NS, l.row, 0, { line_hl_group = l.hl })
-    end
+    require("leetcode-ui.splits.card").apply(bufnr, NS, line_hls, width)
 
     local function activate()
         local cursor = vim.api.nvim_win_get_cursor(0)
@@ -671,9 +669,7 @@ function Side:render_description()
             hl_group = m.hl,
         })
     end
-    for _, l in ipairs(out.line_hls) do
-        vim.api.nvim_buf_set_extmark(bufnr, NS, l.row, 0, { line_hl_group = l.hl })
-    end
+    require("leetcode-ui.splits.card").apply(bufnr, NS, out.line_hls, width)
     self.links = out.links
     self.problems = out.problems or {}
 

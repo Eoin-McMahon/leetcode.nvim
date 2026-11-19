@@ -566,13 +566,15 @@ function Render.render(q, win_width)
             end
             close_block()
         elseif b.kind == "li" then
-            local indent = PAD .. ("  "):rep((b.depth or 1) - 1)
+            -- Inside a shaded block, items start at the block's text margin.
+            local indent = PAD .. (b.shaded and "  " or "") .. ("  "):rep((b.depth or 1) - 1)
             local first = indent .. b.bullet .. " "
             local cont = indent .. (" "):rep(vim.api.nvim_strwidth(b.bullet) + 1)
             if b.shaded then
                 open_block()
+                example_open = false
             end
-            local lines = li_lines(b.segs, width, first, cont)
+            local lines = li_lines(b.segs, width - (b.shaded and 2 or 0), first, cont)
             -- Items that wrap get a blank line between them.
             if not b.shaded and prev and prev.kind == "li" and (#lines > 1 or prev_li_lines > 1) then
                 add("")

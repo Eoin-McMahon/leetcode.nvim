@@ -271,9 +271,7 @@ function Result:write(lines, out)
             hl_group = m.hl,
         })
     end
-    for _, l in ipairs(out and out.line_hls or {}) do
-        vim.api.nvim_buf_set_extmark(bufnr, RESULT_NS, l.row, 0, { line_hl_group = l.hl })
-    end
+    require("leetcode-ui.splits.card").apply(bufnr, RESULT_NS, out and out.line_hls or {}, self:width())
 end
 
 function Result:draw()
