@@ -28,6 +28,7 @@ local browsers = {
     { app = "Arc", glob = "Arc/User Data/*/Cookies", keychain = "Arc" },
     { app = "Chromium", glob = "Chromium/*/Cookies", keychain = "Chromium" },
     { app = "Firefox", glob = "Firefox/Profiles/*/cookies.sqlite" },
+    { app = "Zen", glob = "zen/Profiles/*/cookies.sqlite" },
 }
 
 local hosts = ("('leetcode.%s', '.leetcode.%s')"):format(config.domain, config.domain)
