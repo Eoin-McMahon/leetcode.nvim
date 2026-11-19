@@ -49,6 +49,19 @@ function utils.query(query, variables, opts)
     return utils.curl("post", opts)
 end
 
+---Last successful and failed request, for the auth status window.
+utils.activity = {} ---@type { ok?: { at: integer, endpoint: string }, err?: { at: integer, endpoint: string, status?: integer, msg?: string } }
+
+---@param endpoint string
+---@param err? table
+local function record(endpoint, err)
+    if err then
+        utils.activity.err = { at = os.time(), endpoint = endpoint, status = err.status, msg = err.msg }
+    else
+        utils.activity.ok = { at = os.time(), endpoint = endpoint }
+    end
+end
+
 ---@private
 ---@param method string
 ---@param params table
@@ -79,6 +92,7 @@ function utils.curl(method, params)
         params.callback = function(out, _)
             stop_timing()
             local res, err = utils.handle_res(out)
+            record(params.endpoint, err)
 
             if should_retry(err) then
                 log.debug("retry " .. tries)
@@ -94,6 +108,7 @@ function utils.curl(method, params)
         local out = curl[method](url, params)
         stop_timing("(blocking)")
         local res, err = utils.handle_res(out)
+        record(params.endpoint, err)
 
         if should_retry(err) then
             log.debug("retry " .. tries)
@@ -154,9 +169,15 @@ function utils.check_err(err)
     end
 
     if err.status then
-        if err.status == 401 or err.status == 403 then
+        local body = type(err.out) == "string" and err.out or ""
+        if err.status == 403 and body:find("Just a moment", 1, true) then
+            err.msg = "Cloudflare's bot check blocked the request. This usually passes after a few minutes; running the problem once on leetcode.com in your browser can clear it sooner"
+            err.cloudflare = true
+        elseif err.status == 429 then
+            err.msg = "LeetCode is limiting requests for a moment. Wait a minute and try again"
+        elseif err.status == 401 or err.status == 403 then
             -- require("leetcode.command").expire()
-            local key = require("leetcode-ui.controls").display_key((config.user.mappings or {}).signin)
+            local key = require("leetcode-ui.controls").display_key((config.user.mappings or {}).login_browser)
             err.msg = ("LeetCode rejected the request: the session expired or LeetCode is limiting requests for a while. Sign in again with %s"):format(
                 key and key:gsub("%%%%", "%%") or "`:Leet cookie browser`"
             )

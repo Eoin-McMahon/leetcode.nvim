@@ -86,19 +86,69 @@ local M = {
         controls = true, ---@type boolean Clickable Run and Submit in the winbar
     },
 
-    ---Global keymaps, created by the plugin when it starts. Every key hint in
-    ---the UI is read from here, so remapping a key here changes its hint too.
-    ---`false` or nil leaves an action unmapped. Actions: menu, home, run, submit,
-    ---debug, side, console, testcase, result, reset, add_case,
-    ---layout, tags, stealth, info, list, daily, random, lang, last_submit,
-    ---reset_code, yank, exit, signin, key_hints.
-    ---@type table<string, string|false>
-    mappings = {},
+    ---Every LeetCode key starts with this. `<prefix>` in `mappings` and
+    ---`which_key_groups` expands to it, so changing it moves all keys.
+    ---@type string
+    prefix = "<leader>l",
 
-    ---which-key group names for prefixes of problem mappings, for example
-    ---`{ ["<leader>lc"] = "Code" }`. Registered only on a problem's buffers.
-    ---@type table<string, string>
-    which_key_groups = {},
+    ---Keymaps the plugin creates; every key hint in the UI reads from here, so
+    ---remapping a key changes its hint too. `false` unmaps an action. Keys for
+    ---the code, tests and side panels exist only in a problem's buffers.
+    ---@type table<string, string|string[]|false>
+    mappings = {
+        -- anywhere
+        menu = "<prefix>l", -- closes problems (asks if unsaved)
+        list = "<prefix>pf",
+        recent = "<prefix>pr",
+        random = "<prefix>pR",
+        daily = "<prefix>pd",
+        stealth = "<prefix>z",
+        key_hints = "<prefix>?",
+        auth_status = "<prefix>As",
+        login_cookie = "<prefix>Alc",
+        login_browser = "<prefix>Alb",
+        logout = "<prefix>AL",
+        exit = "<prefix>q",
+        -- code
+        run = "<prefix>cr",
+        submit = "<prefix>cs",
+        debug = "<prefix>cd",
+        last_submit = "<prefix>cS",
+        reset_code = "<prefix>cX",
+        assist = "<prefix>ca",
+        -- tests
+        console = "<prefix>t",
+        new_case = "<prefix>Tw",
+        testcase = "<prefix>To",
+        reset = "<prefix>TR",
+        -- side panel tabs: open, switch, or collapse when already showing
+        tab_description = "<prefix>d",
+        tab_editorial = "<prefix>e",
+        tab_solutions = "<prefix>s",
+        tab_submissions = "<prefix>u",
+        -- problem-wide
+        fullscreen = "<prefix>f",
+        layout = "<prefix>w",
+        lang = "<prefix>L",
+    },
+
+    ---which-key groups. `global` ones show everywhere, `problem` ones only in a
+    ---problem's buffers, like their keys.
+    which_key_groups = {
+        global = {
+            -- A neutral name while stealth mode is on.
+            ["<prefix>"] = function()
+                return vim.g.leetcode_stealth and "Lab" or "LeetCode"
+            end,
+            ["<prefix>p"] = "Problems",
+            ["<prefix>A"] = "Account",
+            ["<prefix>Al"] = "Sign in",
+        },
+        problem = {
+            ["<prefix>c"] = "Code",
+            ["<prefix>T"] = "Tests",
+        },
+    },
 
     ---Show key hints next to bar buttons. Off by default; which-key lists them.
     ---Toggle at runtime with `:Leet keys` or the `key_hints` mapping. Side panel tab letters are always shown.
@@ -199,6 +249,11 @@ local M = {
 
     ---@type lc.highlights
     theme = {},
+
+    ---User-Agent for requests. nil uses the one of the browser the cookies come
+    ---from, so Cloudflare accepts its clearance cookie.
+    ---@type string?
+    user_agent = nil,
 
     ---Use Nerd Font glyphs. `nil` follows `vim.g.have_nerd_font` and defaults to
     ---true; false switches every icon to plain Unicode.

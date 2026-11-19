@@ -86,6 +86,10 @@ icons.actions = {
     stealth = "\u{f070}",
     key_hints = "\u{f11c}",
     signin = "\u{f090}",
+    auth_status = "\u{f2bd}",
+    login_cookie = "\u{f0a0b}",
+    login_browser = "\u{f059f}",
+    logout = "\u{f08b}",
     exit = "\u{f08b}",
 }
 

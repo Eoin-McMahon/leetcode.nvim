@@ -50,6 +50,21 @@ function config.apply(cfg)
     config.load_plugins()
 end
 
+---Expand `<prefix>` in a key (or list of keys) to the configured prefix.
+---@param key? string|string[]|false
+---@return string|string[]|false|nil
+function config.key(key)
+    if type(key) == "table" then
+        return vim.tbl_map(config.key, key)
+    end
+    if type(key) ~= "string" then
+        return key
+    end
+    return (key:gsub("<prefix>", function()
+        return config.user.prefix or "<leader>l"
+    end))
+end
+
 function config.setup()
     config.validate()
 

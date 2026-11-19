@@ -143,6 +143,44 @@ function Browser.app()
     return store and store.browser.app
 end
 
+local user_agent
+
+---The User-Agent of the browser the cookies come from. Cloudflare only honours
+---the browser's `cf_clearance` cookie with the same User-Agent it was issued
+---to; a different one gets the "Just a moment..." challenge.
+---@return string?
+function Browser.user_agent()
+    if user_agent ~= nil then
+        return user_agent or nil
+    end
+    user_agent = false
+    local app = Browser.app()
+    if not app then
+        return
+    end
+    local bundle = "/Applications/" .. app .. ".app/Contents/"
+    if app == "Firefox" or app == "Zen" then
+        local ok, lines = pcall(vim.fn.readfile, bundle .. "Resources/platform.ini")
+        local major = ok and table.concat(lines, "\n"):match("Milestone=(%d+)")
+        if major then
+            user_agent = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:%s.0) Gecko/20100101 Firefox/%s.0"):format(
+                major,
+                major
+            )
+        end
+    else
+        local ok, lines = pcall(vim.fn.readfile, bundle .. "Info.plist")
+        local plist = ok and table.concat(lines, "\n") or ""
+        local major = plist:match("<key>CFBundleShortVersionString</key>%s*<string>(%d+)")
+        if major then
+            user_agent = (
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/%s.0.0.0 Safari/537.36"
+            ):format(major)
+        end
+    end
+    return user_agent or nil
+end
+
 ---@param app string
 ---@param url string
 function Browser.open(app, url)

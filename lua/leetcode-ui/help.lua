@@ -12,7 +12,8 @@ local GROUPS = {
         { "tab_description", "tab_editorial", "tab_solutions", "tab_submissions", "side", "side_fullscreen" },
     },
     { "Problems", { "list", "recent", "random", "daily" } },
-    { "General", { "menu", "layout", "stealth", "key_hints", "signin", "exit" } },
+    { "Account", { "auth_status", "login_browser", "login_cookie", "logout" } },
+    { "General", { "menu", "layout", "stealth", "key_hints", "exit" } },
 }
 
 ---@return { [1]: string, [2]: string }[] key and description, for keys inside the panels

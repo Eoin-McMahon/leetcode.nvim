@@ -863,6 +863,10 @@ cmd.mapping_actions = {
     yank = { "yank", "Yank code" },
     exit = { "exit", "Exit" },
     signin = { "cookie browser", "Sign in again" },
+    auth_status = { "auth status", "Account status" },
+    login_cookie = { "cookie update", "Sign in with a cookie" },
+    login_browser = { "cookie browser", "Sign in from the browser" },
+    logout = { "auth logout", "Sign out" },
     key_hints = { "keys", "Toggle key hints" },
     side_fullscreen = { "fullscreen side", "Fullscreen description panel" },
     fullscreen = { "fullscreen", "Toggle fullscreen" },
@@ -908,7 +912,7 @@ cmd.problem_actions = {
 ---@param name string
 ---@param opts table
 local function set_mapping(name, opts)
-    local lhs = (config.user.mappings or {})[name]
+    local lhs = config.key((config.user.mappings or {})[name])
     local action = cmd.mapping_actions[name]
     if not (lhs and action) then
         return
@@ -931,8 +935,25 @@ local function set_mapping(name, opts)
     end
 end
 
+---Register which-key groups, global or for one buffer.
+---@param kind "global"|"problem"
+---@param bufnr? integer
+function cmd.which_key_groups(kind, bufnr)
+    local groups = (config.user.which_key_groups or {})[kind] or {}
+    local ok, wk = pcall(require, "which-key")
+    if not (ok and wk.add and next(groups)) then
+        return
+    end
+    local spec = {}
+    for lhs, name in pairs(groups) do
+        table.insert(spec, { config.key(lhs), group = name, buffer = bufnr })
+    end
+    pcall(wk.add, spec)
+end
+
 ---Global mappings: the ones that make sense anywhere.
 function cmd.setup_mappings()
+    cmd.which_key_groups("global")
     for name in pairs(config.user.mappings or {}) do
         if not cmd.problem_actions[name] then
             set_mapping(name, {})
@@ -951,15 +972,7 @@ function cmd.problem_mappings(bufnr)
     vim.keymap.set("n", "g?", function()
         require("leetcode-ui.help").open()
     end, { buffer = bufnr, desc = "LeetCode keys" })
-    local groups = config.user.which_key_groups or {}
-    local ok, wk = pcall(require, "which-key")
-    if ok and next(groups) and wk.add then
-        local spec = {}
-        for lhs, name in pairs(groups) do
-            table.insert(spec, { lhs, group = name, buffer = bufnr })
-        end
-        pcall(wk.add, spec)
-    end
+    cmd.which_key_groups("problem", bufnr)
 end
 
 function cmd.setup()
@@ -1071,6 +1084,20 @@ cmd.commands = {
         update = { cmd.cookie_prompt },
         browser = { cmd.browser_sign_in },
         delete = { cmd.sign_out },
+    },
+    auth = {
+        status = {
+            function()
+                require("leetcode-ui.auth").status()
+            end,
+        },
+        logout = {
+            function()
+                if vim.fn.confirm("Sign out of LeetCode?", "&Sign out\n&Cancel", 2) == 1 then
+                    cmd.sign_out()
+                end
+            end,
+        },
     },
     cache = {
         update = { cmd.cache_update },
