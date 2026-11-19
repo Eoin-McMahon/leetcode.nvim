@@ -102,7 +102,20 @@ function Testcase:draw_extmarks()
         width = math.max(width, #p.name)
     end
 
+    -- Each case is a card like the description's examples: a padding row
+    -- above (holding "Case N", and the delete mark on your own cases) and
+    -- below, the parameter names inline, centred at the reading width.
+    local Card = require("leetcode-ui.splits.card")
+    local pane = self.console.pane
+    local win_width = pane and pane:is_open() and vim.api.nvim_win_get_width(pane.winid) or 80
+    local g = Card.geometry(win_width, true)
+    local block = "leetcode_desc_block"
+    local card_width = g.right - g.left
+    local outside = { (" "):rep(g.left), "Normal" }
+    self.delete_cols = { first = g.right - 3, last = g.right - 1 }
+
     local examples = #(self.console.question.q.testcase_list or {})
+    local rows = self:case_rows()
     local j, case, invalid = 1, 0, false
     for i, line in ipairs(lines) do
         if lines[i - 1] == "" and line == "" then
@@ -112,34 +125,61 @@ function Testcase:draw_extmarks()
             local custom = case + (j == 1 and 1 or 0) > examples
             if j == 1 then
                 case = case + 1
-                local label = { { ("Case %d"):format(case), "leetcode_desc_dim" } }
-                if custom then
-                    table.insert(label, { "  " .. config.icons.hide, "leetcode_error" })
+                local title = "  Case " .. case
+                local mark = custom and (config.icons.hide .. "  ") or ""
+                local gap = math.max(card_width - vim.api.nvim_strwidth(title) - vim.api.nvim_strwidth(mark), 1)
+                vim.api.nvim_buf_set_extmark(bufnr, EXTMARK_NS, i - 1, 0, {
+                    virt_lines_above = true,
+                    virt_lines = {
+                        {
+                            outside,
+                            { title, { block, "leetcode_desc_dim" } },
+                            { (" "):rep(gap), block },
+                            { mark, { block, "leetcode_error" } },
+                        },
+                    },
+                })
+                local r = rows[case]
+                if r then
+                    vim.api.nvim_buf_set_extmark(bufnr, EXTMARK_NS, r.last - 1, 0, {
+                        virt_lines = { { outside, { (" "):rep(card_width), block } } },
+                    })
                 end
-                vim.api.nvim_buf_set_extmark(bufnr, EXTMARK_NS, i - 1, 0, {
-                    virt_text = label,
-                    virt_text_pos = "right_align",
-                })
-            end
-            local hint = custom and params[j] and TYPE_HINTS[params[j].type]
-            if hint then
-                vim.api.nvim_buf_set_extmark(bufnr, EXTMARK_NS, i - 1, 0, {
-                    virt_text = { { "  " .. hint, "leetcode_desc_dim" } },
-                    virt_text_pos = "eol",
-                })
             end
             local param = params[j]
-            local text
+            local label
             if param and not invalid then
-                text = { { ("  %s = "):format(param.name .. (" "):rep(width - #param.name)), "leetcode_desc_dim" } }
+                label = { ("  %s = "):format(param.name .. (" "):rep(width - #param.name)), { block, "leetcode_desc_dim" } }
             else
-                text = { { ("  %s "):format(t("invalid")), "leetcode_error" } }
+                label = { ("  %s "):format(t("invalid")), { block, "leetcode_error" } }
             end
             vim.api.nvim_buf_set_extmark(bufnr, EXTMARK_NS, i - 1, 0, {
-                virt_text = text,
+                virt_text = { outside, label },
                 virt_text_pos = "inline",
-                line_hl_group = "leetcode_desc_block",
             })
+            vim.api.nvim_buf_set_extmark(bufnr, EXTMARK_NS, i - 1, 0, {
+                end_col = #line,
+                hl_group = block,
+                priority = 100,
+            })
+            -- Fill to the card's right edge, with the type hint on your cases.
+            local used = g.left + vim.api.nvim_strwidth(label[1]) + vim.api.nvim_strwidth(line)
+            local hint = custom and params[j] and TYPE_HINTS[params[j].type]
+            local fill = {}
+            local room = g.right - used
+            if hint and room > #hint + 2 then
+                table.insert(fill, { "  " .. hint, { block, "leetcode_desc_dim" } })
+                room = room - #hint - 2
+            end
+            if room > 0 then
+                table.insert(fill, { (" "):rep(room), block })
+            end
+            if #fill > 0 then
+                vim.api.nvim_buf_set_extmark(bufnr, EXTMARK_NS, i - 1, 0, {
+                    virt_text = fill,
+                    virt_text_win_col = used,
+                })
+            end
             j = j + 1
         else
             j = 1
@@ -152,7 +192,7 @@ function Testcase:draw_extmarks()
             { { "" } },
             {
                 {
-                    ("  %s writes a new case from Case 1. Edit any value in place; %s on a case of yours deletes it"):format(
+                    (g.left > 0 and (" "):rep(g.left) or "") .. ("%s writes a new case from Case 1. Edit any value in place; %s on a case of yours deletes it"):format(
                         config.icons.write,
                         config.icons.hide
                     ),
@@ -261,28 +301,42 @@ end
 ---@param out? lc.desc.Output
 function Result:write(lines, out)
     local bufnr = self.console.result_buf
+    -- Centred at the reading width when the panel is wider.
+    local Card = require("leetcode-ui.splits.card")
+    local pad = (" "):rep(Card.geometry(self:width(), true).offset)
+    lines = vim.tbl_map(function(line)
+        return line == "" and line or pad .. line
+    end, lines)
     vim.bo[bufnr].modifiable = true
     vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
     vim.bo[bufnr].modifiable = false
     vim.api.nvim_buf_clear_namespace(bufnr, RESULT_NS, 0, -1)
     for _, m in ipairs(out and out.marks or {}) do
-        pcall(vim.api.nvim_buf_set_extmark, bufnr, RESULT_NS, m.row, m.col, {
-            end_col = math.min(m.end_col, #lines[m.row + 1]),
+        pcall(vim.api.nvim_buf_set_extmark, bufnr, RESULT_NS, m.row, m.col + #pad, {
+            end_col = math.min(m.end_col + #pad, #lines[m.row + 1]),
             hl_group = m.hl,
         })
     end
-    require("leetcode-ui.splits.card").apply(bufnr, RESULT_NS, out and out.line_hls or {}, self:width())
+    Card.apply(bufnr, RESULT_NS, out and out.line_hls or {}, self:width(), true)
+end
+
+---Shown until the first run.
+function Result:write_empty()
+    local key = config.key((config.user.mappings or {}).run)
+    local hint = key and (" with " .. require("leetcode-ui.controls").display_key(key):gsub("%%%%", "%%")) or ""
+    local text = ("  No results yet. Run the tests%s."):format(hint)
+    self:write({ "", text }, { marks = { { row = 1, col = 2, end_col = #text, hl = "leetcode_desc_dim" } }, line_hls = {} })
 end
 
 function Result:draw()
     if not self.item then
-        return
+        return self:write_empty()
     end
     local item = self.item
     local testcases = self.console.testcase:by_id(item.submission_id)
     local md = self.console.question.q.meta_data
     local params = type(md) == "table" and md.params or {}
-    local out, count = require("leetcode-ui.splits.result").render(item, testcases, params, self.case_idx, self:width())
+    local out, count = require("leetcode-ui.splits.result").render(item, testcases, params, self.case_idx, require("leetcode-ui.splits.card").geometry(self:width(), true).width)
     self:write(out.lines, out)
 
     local bufnr = self.console.result_buf
@@ -302,7 +356,7 @@ end
 function Result:clear()
     self.item = nil
     self.last_testcase = nil
-    self:write({})
+    self:write_empty()
 end
 
 ---Show a placeholder at once so a click gets feedback before the request leaves.
@@ -468,7 +522,8 @@ function Console.new(layout, pane, result_buf)
         local m = vim.fn.getmousepos()
         local pane = self.pane
         if pane:is_open() and m.winid == pane.winid and m.line > 0 then
-            if m.wincol >= vim.api.nvim_win_get_width(pane.winid) - 2 then
+            local cols = self.testcase.delete_cols
+            if cols and m.wincol >= cols.first and m.wincol <= cols.last then
                 return self.testcase:delete_case(m.line)
             end
         end

@@ -227,6 +227,12 @@ function Layout:apply()
         end
     end
 
+    -- Opening, closing or resizing panels must not scroll the code or move
+    -- its cursor.
+    local code_view = vim.api.nvim_win_call(code_win, function()
+        return vim.fn.winsaveview()
+    end)
+
     self:remember_sizes()
     self:close_panes()
 
@@ -266,6 +272,9 @@ function Layout:apply()
         end
     end
     self.applying = false
+    vim.api.nvim_win_call(code_win, function()
+        vim.fn.winrestview(code_view)
+    end)
 
     if focused_pane and self.panes[focused_pane]:is_open() then
         self.panes[focused_pane]:focus()
@@ -273,6 +282,14 @@ function Layout:apply()
         vim.api.nvim_set_current_win(current)
     else
         vim.api.nvim_set_current_win(code_win)
+    end
+
+    -- The test cards and results are centred, so they follow the new width.
+    if self.console.pane:is_open() and not self.console.collapsed then
+        self.console.testcase:draw_extmarks()
+        if self.console.active == "result" then
+            self.console.result:draw()
+        end
     end
 
     Controls.render(self.question)
@@ -384,6 +401,11 @@ function Layout:refresh_bars()
     self.side:render_winbar()
     if not self.console.collapsed then
         self.console:render_winbar()
+        -- Cards are centred, so they follow the panel's width.
+        self.console.testcase:draw_extmarks()
+        if self.console.active == "result" then
+            self.console.result:draw()
+        end
     end
 end
 
