@@ -380,7 +380,7 @@ function Question:mount_splits()
         layout:hide("side")
     end
     description.toggle = function()
-        layout:toggle("side")
+        layout.side:toggle()
     end
     description.unmount = function() end
     description.mount = function()

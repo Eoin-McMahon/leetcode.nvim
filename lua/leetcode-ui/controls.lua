@@ -65,7 +65,7 @@ _G._leetcode_ctl = {
     hide_side = function()
         local q = question_at_mouse()
         if q and q.layout then
-            q.layout:hide("side")
+            q.layout.side:set_collapsed(true)
         end
     end,
     new_case = function()

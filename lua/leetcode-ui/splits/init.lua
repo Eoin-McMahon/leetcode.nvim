@@ -37,6 +37,9 @@ local PRESETS = {
 
 local PRESET_ORDER = { "website", "wide" }
 
+-- Width of the collapsed side panel: icon, space, "(d)".
+local SIDE_STRIP = 8
+
 local HINT_LABELS = { side = "side panel", console = "console" }
 
 ---Owns the windows of one question tab in the splits layout.
@@ -235,15 +238,17 @@ function Layout:apply()
             if not (parent and vim.api.nvim_win_is_valid(parent)) then
                 parent = code_win
             end
-            local collapsed = entry.pane == "console" and self.console.collapsed
+            local owner = entry.pane == "console" and self.console or self.side
+            local collapsed = owner.collapsed
             local size = self:size_for(entry, parent)
+            local strip = entry.pane == "side" and SIDE_STRIP or 4
             if collapsed then
                 -- One row under the code, or a narrow strip beside it.
-                pane.bufnr = self.console.collapsed_buf
+                pane.bufnr = owner.collapsed_buf
                 pane.winbar = ""
-                size = (entry.dir == "below" or entry.dir == "above") and 1 or 4
-            elseif entry.pane == "console" then
-                pane.bufnr = self.console:active_buf()
+                size = (entry.dir == "below" or entry.dir == "above") and 1 or strip
+            else
+                pane.bufnr = owner:active_buf()
             end
             pane:open(parent, entry.dir, size)
             pane.opened_collapsed = collapsed
@@ -251,15 +256,11 @@ function Layout:apply()
                 if entry.dir == "below" or entry.dir == "above" then
                     vim.api.nvim_win_set_height(pane.winid, 1)
                 else
-                    vim.api.nvim_win_set_width(pane.winid, 4)
+                    vim.api.nvim_win_set_width(pane.winid, strip)
                 end
-            end
-            if entry.pane == "console" then
-                if collapsed then
-                    self.console:render_collapsed(entry.dir == "below" or entry.dir == "above")
-                else
-                    self.console:render_winbar()
-                end
+                owner:render_collapsed(entry.dir == "below" or entry.dir == "above")
+            else
+                owner:render_winbar()
             end
             self:watch(pane)
         end
@@ -389,7 +390,7 @@ function Layout.hints(q)
 
     local parts = {}
     for _, name in ipairs({ "side", "console" }) do
-        if not self.panes[name].visible then
+        if not self.panes[name].visible and not (name == "side" and self.side.collapsed) then
             local key = Controls.display_key(config.user.mappings[name])
             local text = HINT_LABELS[name] .. " hidden"
             if key then

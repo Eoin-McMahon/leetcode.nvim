@@ -68,6 +68,19 @@ function Side.new(layout)
 
     self:map_tab_keys(layout.panes.side.bufnr)
     self:name_buffer("description", layout.panes.side.bufnr)
+
+    -- The narrow column shown while collapsed. Entering it expands the panel.
+    self.collapsed_buf = vim.api.nvim_create_buf(false, true)
+    for opt, value in pairs({ buftype = "nofile", bufhidden = "hide", swapfile = false, modifiable = false }) do
+        vim.bo[self.collapsed_buf][opt] = value
+    end
+    vim.api.nvim_create_autocmd("BufEnter", {
+        buffer = self.collapsed_buf,
+        callback = vim.schedule_wrap(function()
+            self:set_collapsed(false)
+            self.layout.panes.side:focus()
+        end),
+    })
     self:render_winbar()
     return self
 end
@@ -82,7 +95,7 @@ function Side:map_tab_keys(bufnr)
         self:cycle(-1)
     end)
     map(bufnr, keys.toggle, function()
-        self.layout:hide("side")
+        self:set_collapsed(true)
     end)
     for tab, key in pairs(keys.side_tabs or {}) do
         map(bufnr, key, function()
@@ -200,9 +213,61 @@ function Side:render_winbar()
         Controls.button("fullscreen_side", pane:is_fullscreen() and config.icons.restore or config.icons.fullscreen, "leetcode_ctl_key", "fullscreen")
     )
     if not pane:is_fullscreen() then
-        table.insert(parts, Controls.button("hide_side", config.icons.hide, "leetcode_ctl_key", "side"))
+        table.insert(parts, Controls.button("hide_side", config.icons.expand_left, "leetcode_ctl_key", "side"))
     end
     self.layout.panes.side:set_winbar(table.concat(parts, ""))
+end
+
+---@return integer
+function Side:active_buf()
+    return self:buffer(self.active)
+end
+
+---@param collapsed boolean
+function Side:set_collapsed(collapsed)
+    if self.collapsed == collapsed then
+        return
+    end
+    self.collapsed = collapsed
+    self.layout:show("side")
+    self.layout:apply()
+end
+
+function Side:toggle()
+    if not self.layout:is_visible("side") then
+        self.collapsed = false
+        return self.layout:show("side")
+    end
+    self:set_collapsed(not self.collapsed)
+end
+
+---The collapsed column: an expand chevron, then each tab's icon and key.
+function Side:render_collapsed()
+    local bufnr = self.collapsed_buf
+    local ns = vim.api.nvim_create_namespace("leetcode_side_collapsed")
+    local tabs = self:tabs()
+    local lines = {}
+    for _ = 0, #tabs + 1 do
+        table.insert(lines, "")
+    end
+    vim.bo[bufnr].modifiable = true
+    vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
+    vim.bo[bufnr].modifiable = false
+    vim.api.nvim_buf_clear_namespace(bufnr, ns, 0, -1)
+
+    vim.api.nvim_buf_set_extmark(bufnr, ns, 0, 0, {
+        virt_text = { { " " .. config.icons.collapse_right, "leetcode_ctl_key" } },
+        virt_text_pos = "overlay",
+    })
+    for i, tab in ipairs(tabs) do
+        local icon = config.icons.tabs[tab] or config.icons.tabs.submission
+        local key = (config.user.keys.side_tabs or {})[tab]
+        local text = " " .. icon .. (key and (" (" .. key_text(key) .. ")") or "")
+        vim.api.nvim_buf_set_extmark(bufnr, ns, i + 1, 0, {
+            virt_text = { { text, tab == self.active and "leetcode_ctl_tab_active" or "leetcode_ctl_tab" } },
+            virt_text_pos = "overlay",
+        })
+    end
 end
 
 ---Tabs in order. A submission result sits right after the description while
@@ -360,6 +425,11 @@ end
 ---@param tab lc.splits.Tab
 function Side:select(tab)
     self.active = tab
+    if self.collapsed then
+        self.collapsed = false
+        self.layout:show("side")
+        self.layout:apply()
+    end
     self.layout:show("side")
     self.layout.panes.side:set_buf(self:buffer(tab))
     self:render_winbar()

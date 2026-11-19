@@ -496,6 +496,9 @@ function cmd.pane_toggle(name)
         if name == "console" then
             return q.console:toggle()
         end
+        if name == "side" then
+            return q.layout.side:toggle()
+        end
         if name == "testcase" or name == "result" then
             if q.layout:is_visible("console") and q.console.active == name then
                 return q.layout:hide("console")
