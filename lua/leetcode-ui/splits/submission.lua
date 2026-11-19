@@ -1,6 +1,6 @@
 local config = require("leetcode.config")
 
----Render a submission result for the side panel's result tab, like the
+---Render a submission result for the side panel's Submissions tab, like the
 ---website's: a verdict header with the pass count, then either the failing
 ---case (with buttons) or the runtime and memory stats with a distribution
 ---chart, then similar problems.
@@ -92,7 +92,7 @@ function Render.render(item, q, width, details)
         header = header .. passed
     end
     add(header, marks)
-    dim(("submitted at %s"):format(os.date("%b %d, %Y %H:%M")))
+    dim(("submitted at %s"):format(os.date("%b %d, %Y %H:%M", item.timestamp or os.time())))
 
     if ok then
         add("")
@@ -168,7 +168,9 @@ function Render.render(item, q, width, details)
             add(labels, { { col = #PAD, end_col = #labels, hl = "leetcode_desc_dim" } })
         end
     else
-        local params = type(q.q.meta_data) == "table" and q.q.meta_data.params or {}
+        local md = type(q.q.meta_data) == "table" and q.q.meta_data or {}
+        -- Design problems take a list of calls and a list of their arguments.
+        local params = md.systemdesign and { { name = "calls" }, { name = "arguments" } } or md.params or {}
         local err = item.status_code == 20 and item.full_compile_error or item.full_runtime_error
         if present(err) then
             heading(item.status_code == 20 and "Compile error" or "Error")
@@ -176,10 +178,12 @@ function Render.render(item, q, width, details)
         end
         if present(item.last_testcase) then
             heading("Input")
+            add("")
             buttons({
                 { icon = config.icons.add, label = "Use testcase", action = "use" },
                 { icon = config.icons.debug, label = "Debug this case", action = "debug" },
             })
+            add("")
             for i, value in ipairs(vim.split(item.last_testcase, "\n")) do
                 if params[i] then
                     dim(params[i].name .. " =")
@@ -201,7 +205,12 @@ function Render.render(item, q, width, details)
         end
     end
 
-    local similar = q.q.similar
+    if item.past then
+        add("")
+        buttons({ { icon = config.icons.tabs.submissions, label = "Load this code", action = "load" } })
+    end
+
+    local similar = not item.past and q.q.similar
     if type(similar) == "table" and #similar > 0 then
         heading("More challenges")
         for _, s in ipairs(vim.list_slice(similar, 1, MAX_SIMILAR)) do

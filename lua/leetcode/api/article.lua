@@ -134,7 +134,11 @@ end
 function article.submission_details(id, cb)
     local query = [[
         query ($id: Int!) {
-            submissionDetails(submissionId: $id) { runtimeDistribution memoryDistribution totalCorrect totalTestcases }
+            submissionDetails(submissionId: $id) {
+                code statusCode runtimeDisplay runtimePercentile memoryDisplay memoryPercentile
+                runtimeDistribution memoryDistribution totalCorrect totalTestcases
+                lastTestcase codeOutput expectedOutput stdOutput runtimeError compileError
+            }
         }
     ]]
     utils.query(query, { id = tonumber(id) }, {
