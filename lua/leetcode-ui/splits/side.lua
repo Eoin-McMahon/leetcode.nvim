@@ -83,6 +83,11 @@ function Side:map_tab_keys(bufnr)
     map(bufnr, keys.toggle, function()
         self.layout:hide("side")
     end)
+    for tab, key in pairs(keys.side_tabs or {}) do
+        map(bufnr, key, function()
+            self:select(tab)
+        end)
+    end
 end
 
 ---@param tab lc.splits.Tab
@@ -151,10 +156,18 @@ function Side:render_winbar()
     for i, tab in ipairs(TABS) do
         local hl = tab == self.active and "leetcode_ctl_tab_active" or "leetcode_ctl_tab"
         local label = LABELS[tab]
+        local key = (config.user.keys.side_tabs or {})[tab]
+        if key then
+            label = ("%s (%s)"):format(label, Controls.display_key(key_text(key)))
+        end
         if self.locked[tab] and not config.auth.is_premium then
             label = label .. " " .. config.icons.lock
         end
         table.insert(parts, ("%%%d@v:lua._leetcode_ctl.tab@%%#%s# %s %%X%%*"):format(i, hl, label))
+    end
+    local hide = Controls.display_key(config.user.hint_keys.side)
+    if hide then
+        table.insert(parts, ("%%=%%#leetcode_ctl_key#hide %s %%*"):format(hide))
     end
     self.layout.panes.side:set_winbar(table.concat(parts, ""))
 end

@@ -65,7 +65,7 @@ function Stealth.apply(q)
         for name, pane in pairs(q.layout.panes) do
             q.stealth_panes[name] = pane.visible
         end
-        q.layout:hide({ "side", "testcase", "result" })
+        q.layout:hide({ "side", "console" })
     else
         pcall(function()
             q.description:hide()

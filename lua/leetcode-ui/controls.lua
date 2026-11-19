@@ -43,6 +43,18 @@ end
 _G._leetcode_ctl = {
     run = click(false),
     submit = click(true),
+    reset = function()
+        local q = question_at_mouse()
+        if q then
+            q.console.testcase:reset()
+        end
+    end,
+    add_case = function()
+        local q = question_at_mouse()
+        if q then
+            q.console:use_testcase()
+        end
+    end,
 }
 
 ---Render a `hint_keys` value for display: `<leader>` and `<localleader>`
@@ -171,6 +183,7 @@ function Controls.highlights()
     vim.api.nvim_set_hl(0, "leetcode_ctl_key", { link = "Comment", default = true })
     vim.api.nvim_set_hl(0, "leetcode_ctl_tab_active", { link = "Title", default = true })
     vim.api.nvim_set_hl(0, "leetcode_ctl_tab", { link = "Comment", default = true })
+    vim.api.nvim_set_hl(0, "leetcode_ctl_action", { link = "Special", default = true })
 end
 
 return Controls

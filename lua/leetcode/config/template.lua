@@ -84,7 +84,8 @@ local M = {
 
     ---Key labels shown in the UI next to actions, for example
     ---`{ run = "<leader>lr", submit = "<leader>ls" }`. `<leader>` is shown as
-    ---the configured mapleader. Display only; map the keys yourself.
+    ---the configured mapleader. Display only; map the keys yourself. Known
+    ---names: run, submit, side, console, testcase, result, reset, add_case.
     ---@type table<string, string>
     hint_keys = {},
 
@@ -157,10 +158,17 @@ local M = {
         tab_next = "]t", ---@type string|string[] next side pane tab
         tab_prev = "[t", ---@type string|string[] previous side pane tab
         back = "<BS>", ---@type string|string[] back from an opened solution
+        ---Side panel tab keys, active in the panel's read-only buffers.
+        side_tabs = { description = "d", editorial = "e", solutions = "s", submissions = "u" },
     },
 
     ---@type lc.highlights
     theme = {},
+
+    ---Use Nerd Font glyphs. `nil` follows `vim.g.have_nerd_font` and defaults to
+    ---true; false switches every icon to plain Unicode.
+    ---@type boolean?
+    nerd_font = nil,
 
     ---Use LeetCode's own difficulty and calendar colors instead of colors
     ---derived from the active colorscheme.

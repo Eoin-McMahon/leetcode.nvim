@@ -41,6 +41,12 @@ local config = {
 ---@param cfg lc.UserConfig Configurations to be merged.
 function config.apply(cfg)
     config.user = vim.tbl_deep_extend("force", config.default, cfg or {})
+    if config.user.nerd_font == nil then
+        config.user.nerd_font = vim.g.have_nerd_font ~= false
+    end
+    if not config.user.nerd_font then
+        config.icons.use_plain()
+    end
     config.load_plugins()
 end
 

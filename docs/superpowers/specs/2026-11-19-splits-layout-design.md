@@ -402,3 +402,21 @@ toggle each pane, switch preset, `<C-w>` moves, close the code window.
    `popup/console/testcase.lua`.
 2. Run and Submit keep the cursor in the code window.
 3. The second preset is called `wide`.
+
+## Revision after first review (unit 6b)
+
+- The console is one bottom pane with Testcase and Test Result tabs, like the
+  website. A run switches it to Test Result. Tab labels show the global keys
+  from `hint_keys`, since single-letter keys would shadow motions in the
+  editable testcase buffer.
+- Reset cases and Add failed case sit right-aligned in the code winbar.
+  Add failed case appends the last failing input (LeetCode's "use testcase").
+- The testcase buffer shows a hint that it is editable and how a case is laid
+  out.
+- Side pane tabs show their single-letter keys: `(d) (e) (s) (u)`, from
+  `keys.side_tabs`. Both panes show their hide key on the right.
+- Hiding tags also hides the imports section, so the editor starts at the
+  solution. The cursor is kept off concealed lines, because Neovim shows a
+  concealed line under the cursor.
+- `nerd_font` (default `vim.g.have_nerd_font`, else true) picks Nerd Font or
+  plain Unicode icons, including upstream's.

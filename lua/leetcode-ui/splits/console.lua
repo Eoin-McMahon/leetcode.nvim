@@ -1,3 +1,4 @@
+local Controls = require("leetcode-ui.controls")
 local ResultLayout = require("leetcode-ui.renderer.result")
 local Runner = require("leetcode.runner")
 local problemlist = require("leetcode.cache.problemlist")
@@ -7,18 +8,19 @@ local t = require("leetcode.translator")
 
 local EXTMARK_NS = vim.api.nvim_create_namespace("leetcode_extmarks")
 
+---@alias lc.splits.ConsoleTab "testcase"|"result"
+
 ---Testcase buffer for the splits layout. Mirrors `popup/console/testcase.lua`
 ---without the `NuiPopup` dependency, so that file stays as upstream has it.
 ---@class lc.splits.Testcase
 ---@field console lc.splits.Console
----@field pane lc.splits.Pane
 ---@field testcases table<string, string>
 ---@field testcase_len integer
 local Testcase = {}
 Testcase.__index = Testcase
 
 function Testcase:bufnr()
-    return self.pane.bufnr
+    return self.console.testcase_buf
 end
 
 function Testcase:content()
@@ -66,52 +68,75 @@ function Testcase:populate()
     self:draw_extmarks()
 end
 
-function Testcase:draw_extmarks()
-    if not config.user.console.testcase.virt_text then
-        return
+---@return string[]
+function Testcase:param_names()
+    local md = self.console.question.q.meta_data
+    if type(md) ~= "table" or type(md.params) ~= "table" then
+        return {}
     end
+    return vim.tbl_map(function(p)
+        return p.name
+    end, md.params)
+end
+
+function Testcase:draw_extmarks()
     local bufnr = self:bufnr()
     vim.api.nvim_buf_clear_namespace(bufnr, EXTMARK_NS, 0, -1)
 
     local md = self.console.question.q.meta_data
-    if type(md) ~= "table" or not md.params then
-        return
-    end
-
-    local pad = "  "
-    local j, invalid = 1, false
     local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
-    for i, line in ipairs(lines) do
-        if lines[i - 1] == "" and line == "" then
-            invalid = true
-        end
 
-        if line ~= "" then
-            local param = md.params[j]
-            local text
-            if param and not invalid then
-                text = {
-                    { pad },
-                    { "", "Operator" },
-                    { " " },
-                    { param.name, "Comment" },
-                    { " " },
-                    { param.type, "Type" },
-                }
-            else
-                text = { { pad }, { (" %s"):format(t("invalid")), "leetcode_error" } }
+    if config.user.console.testcase.virt_text and type(md) == "table" and md.params then
+        local pad = "  "
+        local j, invalid = 1, false
+        for i, line in ipairs(lines) do
+            if lines[i - 1] == "" and line == "" then
+                invalid = true
             end
-            vim.api.nvim_buf_set_extmark(bufnr, EXTMARK_NS, i - 1, 0, { virt_text = text })
-            j = j + 1
-        else
-            j = 1
+
+            if line ~= "" then
+                local param = md.params[j]
+                local text
+                if param and not invalid then
+                    text = {
+                        { pad },
+                        { config.icons.param, "Operator" },
+                        { " " },
+                        { param.name, "Comment" },
+                        { " " },
+                        { param.type, "Type" },
+                    }
+                else
+                    text = { { pad }, { (" %s"):format(t("invalid")), "leetcode_error" } }
+                end
+                vim.api.nvim_buf_set_extmark(bufnr, EXTMARK_NS, i - 1, 0, { virt_text = text })
+                j = j + 1
+            else
+                j = 1
+            end
         end
     end
+
+    -- Make it obvious the buffer is editable and how a case is laid out.
+    local names = table.concat(self:param_names(), ", ")
+    vim.api.nvim_buf_set_extmark(bufnr, EXTMARK_NS, math.max(#lines - 1, 0), 0, {
+        virt_lines = {
+            { { "" } },
+            {
+                {
+                    ("  Add your own case: a blank line, then one line each for %s"):format(
+                        names ~= "" and names or "the inputs"
+                    ),
+                    "Comment",
+                },
+            },
+        },
+    })
 end
 
 function Testcase:reset()
     self:populate()
-    log.info("Test cases have been reset")
+    log.info("Test cases reset to the examples")
 end
 
 ---@param input string
@@ -128,25 +153,26 @@ function Testcase:append(input)
 end
 
 function Testcase:focus()
-    self.console.layout:show("testcase")
-    self.pane:focus()
+    self.console:select("testcase", true)
 end
 
 ---Result buffer for the splits layout, drawn by the plugin's result renderer.
 ---@class lc.splits.Result
 ---@field console lc.splits.Console
----@field pane lc.splits.Pane
 ---@field renderer lc.ui.Result
 ---@field last_testcase? string
 local Result = {}
 Result.__index = Result
 
 function Result:target()
-    return { bufnr = self.pane.bufnr, winid = self.pane:is_open() and self.pane.winid or nil }
+    local console = self.console
+    local pane = console.pane
+    local shown = pane:is_open() and vim.api.nvim_win_get_buf(pane.winid) == console.result_buf
+    return { bufnr = console.result_buf, winid = shown and pane.winid or nil }
 end
 
 function Result:map(...)
-    self.renderer.bufnr = self.pane.bufnr
+    self.renderer.bufnr = self.console.result_buf
     self.renderer:map(...)
 end
 
@@ -155,7 +181,7 @@ function Result:draw()
 end
 
 function Result:clear()
-    self.renderer.bufnr = self.pane.bufnr
+    self.renderer.bufnr = self.console.result_buf
     self.renderer:clear()
     self.last_testcase = nil
 end
@@ -163,7 +189,7 @@ end
 ---Show a placeholder at once so a click gets feedback before the request leaves.
 ---@param submit boolean
 function Result:pending(submit)
-    local bufnr = self.pane.bufnr
+    local bufnr = self.console.result_buf
     vim.bo[bufnr].modifiable = true
     vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, { "", "  " .. (submit and "Submitting…" or "Running…") })
     vim.bo[bufnr].modifiable = false
@@ -172,7 +198,7 @@ end
 ---@param item lc.interpreter_response
 function Result:handle(item)
     self.renderer:handle_res(item)
-    self.console.layout:set_result_status(item._.hl, item._.title)
+    self.console:set_status(item._.hl, item._.title)
 
     if item.last_testcase then
         self.last_testcase = item.last_testcase
@@ -188,49 +214,107 @@ function Result:handle(item)
     end
 
     self:draw()
+    Controls.render(self.console.question)
 end
 
 function Result:focus()
-    self.console.layout:show("result")
-    self.pane:focus()
+    self.console:select("result", true)
 end
 
----The `q.console` object for the splits layout. Same interface the runner and
+---The `q.console` object for the splits layout: one bottom pane with Testcase
+---and Test Result tabs, like the website. Same interface the runner and
 ---commands use with the floating console.
 ---@class lc.splits.Console
 ---@field question lc.ui.Question
 ---@field layout lc.splits.Layout
+---@field pane lc.splits.Pane
+---@field testcase_buf integer
+---@field result_buf integer
+---@field active lc.splits.ConsoleTab
+---@field status_hl? string
+---@field status_title? string
 ---@field testcase lc.splits.Testcase
 ---@field result lc.splits.Result
 local Console = {}
 Console.__index = Console
 
+local TABS = { "testcase", "result" }
+local LABELS = { testcase = "Testcase", result = "Test Result" }
+
 ---@param layout lc.splits.Layout
----@param testcase_pane lc.splits.Pane
----@param result_pane lc.splits.Pane
-function Console.new(layout, testcase_pane, result_pane)
-    local self = setmetatable({ question = layout.question, layout = layout }, Console)
+---@param pane lc.splits.Pane shows the testcase buffer when created
+---@param result_buf integer
+function Console.new(layout, pane, result_buf)
+    local self = setmetatable({
+        question = layout.question,
+        layout = layout,
+        pane = pane,
+        testcase_buf = pane.bufnr,
+        result_buf = result_buf,
+        active = "testcase",
+    }, Console)
 
-    self.testcase = setmetatable({
-        console = self,
-        pane = testcase_pane,
-        testcases = {},
-        testcase_len = 0,
-    }, Testcase)
-
-    self.result = setmetatable({ console = self, pane = result_pane }, Result)
+    self.testcase = setmetatable({ console = self, testcases = {}, testcase_len = 0 }, Testcase)
+    self.result = setmetatable({ console = self }, Result)
     self.result.renderer = ResultLayout(self)
-    self.result.renderer.bufnr = result_pane.bufnr
+    self.result.renderer.bufnr = result_buf
 
     self.testcase:populate()
     vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI", "TextChangedP", "InsertLeave" }, {
-        buffer = testcase_pane.bufnr,
+        buffer = self.testcase_buf,
         callback = function()
             self.testcase:draw_extmarks()
         end,
     })
 
+    self:render_winbar()
     return self
+end
+
+---@param tab lc.splits.ConsoleTab
+---@param focus? boolean
+function Console:select(tab, focus)
+    self.active = tab
+    self.layout:show("console")
+    self.pane:set_buf(tab == "result" and self.result_buf or self.testcase_buf)
+    self:render_winbar()
+    if tab == "result" then
+        self.result:draw()
+    end
+    if focus then
+        self.pane:focus()
+    end
+end
+
+function Console:cycle()
+    self:select(self.active == "testcase" and "result" or "testcase")
+end
+
+---@param hl? string
+---@param title? string
+function Console:set_status(hl, title)
+    self.status_hl = hl
+    self.status_title = title
+    self:render_winbar()
+end
+
+function Console:render_winbar()
+    local parts = { " " }
+    for i, tab in ipairs(TABS) do
+        local hl = tab == self.active and "leetcode_ctl_tab_active" or "leetcode_ctl_tab"
+        local key = Controls.display_key(config.user.hint_keys[tab])
+        local label = LABELS[tab] .. (key and (" (%s)"):format(key) or "")
+        if tab == "result" and self.status_title then
+            label = ("%s %%#%s#%s"):format(label, self.status_hl or hl, (self.status_title:gsub("%%", "%%%%")))
+        end
+        table.insert(parts, ("%%%d@v:lua._leetcode_ctl.console_tab@%%#%s# %s %%X%%*"):format(i, hl, label))
+    end
+
+    local hide = Controls.display_key(config.user.hint_keys.console)
+    if hide then
+        table.insert(parts, ("%%=%%#leetcode_ctl_key#hide %s %%*"):format(hide))
+    end
+    self.pane:set_winbar(table.concat(parts, ""))
 end
 
 ---@param submit? boolean
@@ -243,11 +327,11 @@ function Console:run(submit)
         return log.warn("Runner is busy")
     end
 
-    if config.user.console.open_on_runcode then
-        self.layout:show("result")
-    end
-    self.layout:set_result_status(nil)
+    self:set_status(nil)
     self.result:pending(submit == true)
+    if config.user.console.open_on_runcode or self.layout:is_visible("console") then
+        self:select("result")
+    end
 
     Runner:init(self.question):run(submit)
 end
@@ -256,27 +340,42 @@ function Console:use_testcase()
     local last = self.result.last_testcase
     if last and last ~= "" then
         self.testcase:append(last)
+        self:select("testcase")
+        log.info("Added the failed case to your test cases")
     else
-        log.warn("No testcase to use")
+        log.warn("No failed case to add. Run or submit first")
     end
 end
 
 function Console:show()
-    self.layout:show({ "testcase", "result" })
+    self.layout:show("console")
 end
 
 function Console:hide()
-    self.layout:hide({ "testcase", "result" })
+    self.layout:hide("console")
 end
 
 function Console:toggle()
-    if self.layout:is_visible("testcase") or self.layout:is_visible("result") then
-        self:hide()
-    else
-        self:show()
-    end
+    self.layout:toggle("console")
 end
 
 function Console:unmount() end
+
+function Console:destroy()
+    if vim.api.nvim_buf_is_valid(self.result_buf) then
+        pcall(vim.api.nvim_buf_delete, self.result_buf, { force = true })
+    end
+end
+
+_G._leetcode_ctl.console_tab = function(minwid)
+    local winid = vim.fn.getmousepos().winid
+    for _, q in ipairs(_Lc_state.questions) do
+        if q.layout and q.layout.panes.console.winid == winid then
+            q.console:select(TABS[minwid])
+        end
+    end
+end
+
+Console.TABS = TABS
 
 return Console

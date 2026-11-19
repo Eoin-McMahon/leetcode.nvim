@@ -4,7 +4,7 @@ local Controls = require("leetcode-ui.controls")
 local config = require("leetcode.config")
 local timings = require("leetcode.timings")
 
----@alias lc.splits.PaneName "side"|"testcase"|"result"
+---@alias lc.splits.PaneName "side"|"console"
 
 ---@class lc.splits.Entry
 ---@field pane lc.splits.PaneName
@@ -19,9 +19,6 @@ end
 local function console_size()
     return config.user.splits.console.size
 end
-local function result_ratio()
-    return config.user.splits.console.result_ratio
-end
 
 ---Panes open in order, each relative to its parent window, so the website
 ---console sits under the code window only, not across the whole tab.
@@ -29,19 +26,17 @@ end
 local PRESETS = {
     website = {
         { pane = "side", dir = "left", parent = "code", size = side_width },
-        { pane = "testcase", dir = "below", parent = "code", size = console_size },
-        { pane = "result", dir = "right", parent = "testcase", size = result_ratio, nested = true },
+        { pane = "console", dir = "below", parent = "code", size = console_size },
     },
     wide = {
         { pane = "side", dir = "left", parent = "code", size = side_width },
-        { pane = "testcase", dir = "right", parent = "code", size = console_size },
-        { pane = "result", dir = "below", parent = "testcase", size = result_ratio, nested = true },
+        { pane = "console", dir = "right", parent = "code", size = console_size },
     },
 }
 
 local PRESET_ORDER = { "website", "wide" }
 
-local HINT_LABELS = { side = "description", testcase = "testcase", result = "result" }
+local HINT_LABELS = { side = "side panel", console = "console" }
 
 ---Owns the windows of one question tab in the splits layout.
 ---@class lc.splits.Layout
@@ -52,8 +47,6 @@ local HINT_LABELS = { side = "description", testcase = "testcase", result = "res
 ---@field console lc.splits.Console
 ---@field side lc.splits.Side
 ---@field applying boolean
----@field status_hl? string
----@field status_title? string
 local Layout = {}
 Layout.__index = Layout
 
@@ -87,20 +80,26 @@ function Layout.new(question)
                 conceallevel = 2,
             },
         }),
-        testcase = Pane.new("testcase", {
+        console = Pane.new("console", {
             buf_opts = { modifiable = true, buftype = "nofile", filetype = config.name .. "-testcase" },
-            win_opts = { wrap = true, linebreak = true },
-        }),
-        result = Pane.new("result", {
-            buf_opts = { modifiable = false, buftype = "nofile", filetype = config.name },
             win_opts = { wrap = true, linebreak = true },
         }),
     }
 
-    self.console = Console.new(self, self.panes.testcase, self.panes.result)
+    local result_buf = vim.api.nvim_create_buf(false, true)
+    for opt, value in pairs({
+        modifiable = false,
+        buftype = "nofile",
+        bufhidden = "hide",
+        swapfile = false,
+        filetype = config.name,
+    }) do
+        vim.bo[result_buf][opt] = value
+    end
+
+    self.console = Console.new(self, self.panes.console, result_buf)
     self.side = require("leetcode-ui.splits.side").new(self)
     self:set_keymaps()
-    self:update_winbars()
 
     return self
 end
@@ -276,56 +275,29 @@ end
 ---@private
 function Layout:set_keymaps()
     local keys = config.user.keys
-    local function map(pane, key, fn)
+    local console = self.console
+    local function map(bufnr, key, fn)
         for _, k in ipairs(type(key) == "table" and key or { key }) do
-            vim.keymap.set("n", k, fn, { buffer = self.panes[pane].bufnr, nowait = true })
+            vim.keymap.set("n", k, fn, { buffer = bufnr, nowait = true })
         end
     end
 
-    for _, name in ipairs({ "testcase", "result" }) do
-        map(name, keys.toggle, function()
-            self:hide(name)
+    -- The testcase buffer is edited like any file, so it only gets keys that do
+    -- not shadow common motions. The result buffer is read-only.
+    for _, bufnr in ipairs({ console.testcase_buf, console.result_buf }) do
+        map(bufnr, keys.tab_next, function()
+            console:cycle()
+        end)
+        map(bufnr, keys.tab_prev, function()
+            console:cycle()
         end)
     end
-    for _, name in ipairs({ "testcase", "result" }) do
-        map(name, keys.focus_testcases, function()
-            self.console.testcase:focus()
-        end)
-        map(name, keys.focus_result, function()
-            self.console.result:focus()
-        end)
-        map(name, keys.use_testcase, function()
-            self.console:use_testcase()
-        end)
-    end
-    map("testcase", keys.reset_testcases, function()
-        self.console.testcase:reset()
+    map(console.result_buf, keys.toggle, function()
+        self:hide("console")
     end)
-end
-
----@param hl? string
----@param title? string
-function Layout:set_result_status(hl, title)
-    self.status_hl = hl
-    self.status_title = title
-    self:update_winbars()
-end
-
----@private
-function Layout:update_winbars()
-    local keys = config.user.keys
-    self.panes.testcase:set_winbar(
-        (" %%#Title#Testcases%%*  %%#leetcode_ctl_key#%s reset  %s use result%%*"):format(
-            keys.reset_testcases,
-            keys.use_testcase
-        )
-    )
-
-    local status = ""
-    if self.status_title then
-        status = ("  %%#%s#%s%%*"):format(self.status_hl or "Normal", (self.status_title:gsub("%%", "%%%%")))
-    end
-    self.panes.result:set_winbar((" %%#Title#Result%%*%s"):format(status))
+    map(console.result_buf, keys.use_testcase, function()
+        console:use_testcase()
+    end)
 end
 
 ---Restore hints for hidden panes, shown in the code window's winbar.
@@ -338,7 +310,7 @@ function Layout.hints(q)
     end
 
     local parts = {}
-    for _, name in ipairs({ "side", "testcase", "result" }) do
+    for _, name in ipairs({ "side", "console" }) do
         if not self.panes[name].visible then
             local key = Controls.display_key(config.user.hint_keys[name])
             local text = HINT_LABELS[name] .. " hidden"
@@ -351,6 +323,27 @@ function Layout.hints(q)
     return table.concat(parts, "  ")
 end
 
+---Reset and add-failed-case buttons, right-aligned in the code winbar.
+---@param q lc.ui.Question
+---@return string?
+function Layout.actions(q)
+    if not q.layout then
+        return
+    end
+    local function button(fn, icon, label, key_name)
+        local key = Controls.display_key(config.user.hint_keys[key_name])
+        return ("%%@v:lua._leetcode_ctl.%s@%%#leetcode_ctl_action# %s %s%s %%X%%*"):format(
+            fn,
+            icon,
+            label,
+            key and (" %#leetcode_ctl_key#" .. key) or ""
+        )
+    end
+        return button("reset", config.icons.reset, "Reset cases", "reset")
+        .. button("add_case", config.icons.add, "Add failed case", "add_case")
+end
+
+table.insert(Controls.segments, Layout.actions)
 table.insert(Controls.segments, Layout.hints)
 
 function Layout:unmount()
@@ -363,6 +356,7 @@ function Layout:unmount()
             pane:destroy()
         end
     end
+    self.console:destroy()
 end
 
 Layout.PRESETS = PRESETS

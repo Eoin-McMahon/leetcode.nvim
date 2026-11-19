@@ -484,7 +484,27 @@ function cmd.pane_toggle(name)
         if not q.layout then
             return log.warn("Pane toggles need `layout = \"splits\"`")
         end
+        if name == "testcase" or name == "result" then
+            if q.layout:is_visible("console") and q.console.active == name then
+                return q.layout:hide("console")
+            end
+            return q.console:select(name)
+        end
         q.layout:toggle(name)
+    end
+end
+
+function cmd.testcase_reset()
+    local q = require("leetcode.utils").curr_question()
+    if q then
+        q.console.testcase:reset()
+    end
+end
+
+function cmd.testcase_add_failed()
+    local q = require("leetcode.utils").curr_question()
+    if q then
+        q.console:use_testcase()
     end
 end
 
@@ -506,7 +526,11 @@ end
 function cmd.tags_toggle()
     local q = require("leetcode.utils").curr_question()
     if q then
-        require("leetcode-ui.tags").toggle(q.bufnr)
+        local tags = require("leetcode-ui.tags")
+        tags.toggle(q.bufnr)
+        if not tags.hidden(q.bufnr) and config.user.editor.fold_imports then
+            q:editor_fold_imports(false)
+        end
     end
 end
 
@@ -725,8 +749,13 @@ cmd.commands = {
     layout = { cmd.layout_cycle },
     pane = {
         side = { cmd.pane_toggle("side") },
+        console = { cmd.pane_toggle("console") },
         testcase = { cmd.pane_toggle("testcase") },
         result = { cmd.pane_toggle("result") },
+    },
+    testcase = {
+        reset = { cmd.testcase_reset },
+        add = { cmd.testcase_add_failed },
     },
     -- session = {
     --     change = {
