@@ -185,32 +185,47 @@ function Side:premium_message(tab)
 end
 
 ---Tabs as `icon (key)`, with the active one also named and highlighted:
----`▤ Description (d)  ✎ (e)  ☰ (s)  ✓ (u)`. Fits a narrow panel.
+---`▤ Description (d)  ✎ (e)  ☰ (s)  ✓ (u)`. When the panel is too narrow the
+---key hints go first, then the active tab's name, so the bar never gets cut.
 function Side:render_winbar()
-    local parts = { " " }
-    for i, tab in ipairs(self:tabs()) do
-        local active = tab == self.active
-        local hl = active and "leetcode_ctl_tab_active" or "leetcode_ctl_tab"
-        local label = config.icons.tabs[tab]
-        if active then
-            label = label .. " " .. self:label(tab)
-        end
-        local key = (config.user.keys.side_tabs or {})[tab]
-        if key then
-            label = ("%s (%s)"):format(label, Controls.display_key(key_text(key)))
-        end
-        table.insert(parts, ("%%%d@v:lua._leetcode_ctl.tab@%%#%s# %s %%X%%*"):format(i, hl, label))
-    end
-    table.insert(parts, "%=")
     local pane = self.layout.panes.side
-    table.insert(
-        parts,
-        Controls.button("fullscreen_side", pane:is_fullscreen() and config.icons.restore or config.icons.fullscreen, "leetcode_ctl_key", "fullscreen")
-    )
-    if not pane:is_fullscreen() then
-        table.insert(parts, Controls.button("hide_side", config.icons.expand_left, "leetcode_ctl_key", "side"))
+    local function build(level)
+        local parts = { " " }
+        for i, tab in ipairs(self:tabs()) do
+            local active = tab == self.active
+            local hl = active and "leetcode_ctl_tab_active" or "leetcode_ctl_tab"
+            local label = config.icons.tabs[tab]
+            if active and level < 4 then
+                label = label .. " " .. self:label(tab)
+            end
+            local key = (config.user.keys.side_tabs or {})[tab]
+            if key and (level == 1 or (level == 2 and active)) then
+                label = ("%s (%s)"):format(label, Controls.display_key(key_text(key)))
+            end
+            table.insert(parts, ("%%%d@v:lua._leetcode_ctl.tab@%%#%s# %s %%X%%*"):format(i, hl, label))
+        end
+        table.insert(parts, "%=")
+        table.insert(
+            parts,
+            Controls.button("fullscreen_side", pane:is_fullscreen() and config.icons.restore or config.icons.fullscreen, "leetcode_ctl_key", "fullscreen")
+        )
+        if not pane:is_fullscreen() then
+            table.insert(parts, Controls.button("hide_side", config.icons.expand_left, "leetcode_ctl_key", "side"))
+        end
+        return table.concat(parts, "")
     end
-    self.layout.panes.side:set_winbar(table.concat(parts, ""))
+
+    local available = self:width()
+    local bar
+    for level = 1, 4 do
+        bar = build(level)
+        -- Measure without the `%=` spacer, which stretches to maxwidth.
+        local ok, res = pcall(vim.api.nvim_eval_statusline, (bar:gsub("%%=", "")), { maxwidth = 1000 })
+        if not ok or res.width <= available then
+            break
+        end
+    end
+    pane:set_winbar(bar)
 end
 
 ---Width to render for: the fullscreen float when there is one, so text uses
@@ -240,6 +255,7 @@ end
 
 ---Re-render width-dependent tabs, after a resize or fullscreen change.
 function Side:rerender()
+    self:render_winbar()
     self:render_description()
     if self.submissions or self.latest then
         self:render_submissions()

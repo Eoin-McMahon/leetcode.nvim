@@ -253,7 +253,7 @@ local function wrap(segs, width, first, rest)
             words[#words].text = words[#words].text .. " "
         end
         for piece in seg.text:gmatch("%S+%s*") do
-            table.insert(words, { text = piece, hl = seg.hl })
+            table.insert(words, { text = piece, hl = seg.hl, seg = seg })
         end
     end
 
@@ -274,7 +274,14 @@ local function wrap(segs, width, first, rest)
         line.text = line.text .. word
         used = used + vim.api.nvim_strwidth(word)
         if w.hl then
-            table.insert(line.marks, { col = col, end_col = col + #vim.trim(word), hl = w.hl })
+            -- Words of one segment on one line share a mark, so a code span
+            -- like `get(int key)` is shaded as one piece, spaces included.
+            local last = line.marks[#line.marks]
+            if last and last.seg == w.seg then
+                last.end_col = col + #vim.trim(word)
+            else
+                table.insert(line.marks, { col = col, end_col = col + #vim.trim(word), hl = w.hl, seg = w.seg })
+            end
         end
     end
     line.text = line.text:gsub("%s+$", "")
@@ -311,6 +318,38 @@ local function code_marks(text, from)
         table.insert(marks, { col = comment - 1, end_col = #text, hl = "@comment" })
     end
     return marks
+end
+
+---Lines of a list item. An item that opens with a code span, like
+---`get(int key) Return the value...`, and does not fit on one line puts the
+---code on its own line with the explanation under it.
+---@param segs lc.desc.Seg[]
+---@param width integer
+---@param first string
+---@param cont string
+local function li_lines(segs, width, first, cont)
+    local lead, rest = {}, {}
+    for _, seg in ipairs(segs) do
+        if #rest == 0 and (seg.hl == "leetcode_desc_code" or vim.trim(seg.text) == "") then
+            table.insert(lead, seg)
+        else
+            table.insert(rest, seg)
+        end
+    end
+    local has_code = vim.iter(lead):any(function(seg)
+        return seg.hl == "leetcode_desc_code"
+    end)
+    local all = wrap(segs, width, first, cont)
+    if not has_code or #rest == 0 or #all == 1 then
+        return all
+    end
+    rest[1] = { text = (rest[1].text:gsub("^%s+", "")), hl = rest[1].hl }
+    if rest[1].text == "" then
+        table.remove(rest, 1)
+    end
+    local lines = wrap(lead, width, first, cont)
+    vim.list_extend(lines, wrap(rest, width, cont, cont))
+    return lines
 end
 
 ---@param n number
@@ -390,7 +429,12 @@ function Render.render(q, win_width)
     local pills, marks = PAD, {}
     local function pill(text, hl)
         if #pills > #PAD then
-            pills = pills .. "  "
+            if vim.api.nvim_strwidth(pills .. "  " .. text) > width + #PAD then
+                add(pills, marks)
+                pills, marks = PAD, {}
+            else
+                pills = pills .. "  "
+            end
         end
         table.insert(marks, { col = #pills, end_col = #pills + #text, hl = hl })
         pills = pills .. text
@@ -411,9 +455,13 @@ function Render.render(q, win_width)
     add(PAD .. ("─"):rep(width), { { col = #PAD, end_col = #PAD + width * 3, hl = "leetcode_desc_rule" } })
     add("")
 
+    local prev, prev_li_lines = nil, 0
     for _, b in ipairs(Render.parse(data.content or "")) do
         if not b.shaded and b.kind ~= "pre" then
             close_block()
+        end
+        if prev and prev.kind == "li" and b.kind ~= "li" and not b.shaded then
+            blank()
         end
         if b.kind == "heading" then
             blank()
@@ -463,11 +511,20 @@ function Render.render(q, win_width)
         elseif b.kind == "li" then
             local indent = PAD .. ("  "):rep((b.depth or 1) - 1)
             local first = indent .. b.bullet .. " "
+            local cont = indent .. (" "):rep(vim.api.nvim_strwidth(b.bullet) + 1)
             if b.shaded then
                 open_block()
             end
-            for _, l in ipairs(wrap(b.segs, width, first, indent .. (" "):rep(vim.api.nvim_strwidth(b.bullet) + 1))) do
-                table.insert(l.marks, 1, { col = #indent, end_col = #indent + #b.bullet, hl = "leetcode_desc_dim" })
+            local lines = li_lines(b.segs, width, first, cont)
+            -- Items that wrap get a blank line between them.
+            if not b.shaded and prev and prev.kind == "li" and (#lines > 1 or prev_li_lines > 1) then
+                add("")
+            end
+            prev_li_lines = #lines
+            for i, l in ipairs(lines) do
+                if i == 1 then
+                    table.insert(l.marks, 1, { col = #indent, end_col = #indent + #b.bullet, hl = "leetcode_desc_dim" })
+                end
                 add(l.text, l.marks, b.shaded and "leetcode_desc_block" or nil)
             end
         else
@@ -489,6 +546,7 @@ function Render.render(q, win_width)
                 add("")
             end
         end
+        prev = b
     end
 
     close_block()
