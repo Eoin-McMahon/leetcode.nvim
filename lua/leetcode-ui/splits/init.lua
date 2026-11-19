@@ -241,7 +241,7 @@ function Layout:apply()
             local owner = entry.pane == "console" and self.console or self.side
             local collapsed = owner.collapsed
             local size = self:size_for(entry, parent)
-            local strip = entry.pane == "side" and SIDE_STRIP or 4
+            local strip = SIDE_STRIP
             if collapsed then
                 -- One row under the code, or a narrow strip beside it.
                 pane.bufnr = owner.collapsed_buf

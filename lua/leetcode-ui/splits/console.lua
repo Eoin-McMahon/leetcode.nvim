@@ -515,36 +515,45 @@ function Console:toggle()
     self:set_collapsed(not self.collapsed)
 end
 
----@param horizontal boolean one row under the code, else a narrow strip
+---Collapsed, the panel looks like the collapsed side panel: tab icons only,
+---the active one marked and highlighted, no chevron. Entering or clicking it
+---expands the panel.
+---@param horizontal boolean one row under the code, else a narrow column
 function Console:render_collapsed(horizontal)
     local bufnr = self.collapsed_buf
     local ns = vim.api.nvim_create_namespace("leetcode_collapsed")
-    local icons = config.icons
-    local lines = horizontal and { "" } or { "", "", "" }
+    local tabs = { "testcase", "result" }
+    local lines = {}
+    for _ = 1, horizontal and 1 or #tabs * 2 + 1 do
+        table.insert(lines, "")
+    end
     vim.bo[bufnr].modifiable = true
     vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
     vim.bo[bufnr].modifiable = false
     vim.api.nvim_buf_clear_namespace(bufnr, ns, 0, -1)
 
+    -- The one-row bar has room for the labels; the column has not.
+    local function chunk(tab)
+        local active = tab == self.active
+        local label = " " .. config.icons.console_tabs[tab] .. (horizontal and (" " .. LABELS[tab]) or "")
+        return {
+            { active and "▎" or " ", "leetcode_activity_mark" },
+            { label, active and "leetcode_ctl_tab_active" or "leetcode_ctl_tab" },
+        }
+    end
     if horizontal then
-        vim.api.nvim_buf_set_extmark(bufnr, ns, 0, 0, {
-            virt_text = {
-                { " " .. icons.console_tabs.testcase .. " " .. LABELS.testcase .. "  ", "leetcode_ctl_tab" },
-                { icons.console_tabs.result .. " " .. LABELS.result, "leetcode_ctl_tab" },
-            },
-            virt_text_pos = "overlay",
-        })
-        vim.api.nvim_buf_set_extmark(bufnr, ns, 0, 0, {
-            virt_text = { { icons.expand_up .. " ", "leetcode_ctl_key" } },
-            virt_text_pos = "right_align",
-        })
-    else
-        for row, icon in ipairs({ icons.expand_left, icons.console_tabs.testcase, icons.console_tabs.result }) do
-            vim.api.nvim_buf_set_extmark(bufnr, ns, row - 1, 0, {
-                virt_text = { { " " .. icon, row == 1 and "leetcode_ctl_key" or "leetcode_ctl_tab" } },
-                virt_text_pos = "overlay",
-            })
+        local virt = {}
+        for i, tab in ipairs(tabs) do
+            vim.list_extend(virt, chunk(tab))
+            if i < #tabs then
+                table.insert(virt, { "  ", "leetcode_ctl_tab" })
+            end
         end
+        vim.api.nvim_buf_set_extmark(bufnr, ns, 0, 0, { virt_text = virt, virt_text_pos = "overlay" })
+        return
+    end
+    for i, tab in ipairs(tabs) do
+        vim.api.nvim_buf_set_extmark(bufnr, ns, i * 2, 0, { virt_text = chunk(tab), virt_text_pos = "overlay" })
     end
 end
 

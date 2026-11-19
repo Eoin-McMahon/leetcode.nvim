@@ -312,24 +312,55 @@ function Side:label(tab)
     return LABELS[tab]
 end
 
----Show "Submitting…" at the top of the Submissions tab while the judge runs.
+---Show a spinner at the top of the Submissions tab while the judge runs.
 function Side:show_submission_pending()
     self.latest = { pending = true }
-    self.viewing = nil
     self:select("submissions")
     self:render_submissions()
+    self:start_spinner()
 end
 
----The latest submit response: shown at the top of the Submissions tab, above
----the list of earlier submissions.
+---The latest submit response, shown at the top of the Submissions tab above
+---the previous submissions.
 ---@param item table
 function Side:show_submission(item)
     require("leetcode.assist").mark_error(self.question, item)
     self.latest = item
-    self.viewing = nil
     self:select("submissions")
     self:render_submissions()
     self:fetch_details(item)
+    -- The list now includes this submission; it is left out of "Previous".
+    if self.submissions then
+        self:load_submissions()
+    end
+end
+
+---Animate the pending line in place, without re-rendering the tab.
+function Side:start_spinner()
+    if self.spinner then
+        return
+    end
+    local Controls = require("leetcode-ui.controls")
+    local frame = 1
+    self.spinner = vim.uv.new_timer()
+    self.spinner:start(Controls.SPINNER_MS, Controls.SPINNER_MS, vim.schedule_wrap(function()
+        local bufnr = self.bufs and self.bufs.submissions
+        local row = self.spinner_row
+        if not (self.latest and self.latest.pending and bufnr and vim.api.nvim_buf_is_valid(bufnr) and row) then
+            if self.spinner then
+                self.spinner:stop()
+                self.spinner:close()
+                self.spinner = nil
+            end
+            return
+        end
+        frame = frame % #Controls.SPINNER + 1
+        local line = ("  %s Submitting…"):format(Controls.SPINNER[frame])
+        vim.bo[bufnr].modifiable = true
+        pcall(vim.api.nvim_buf_set_lines, bufnr, row, row + 1, false, { line })
+        vim.bo[bufnr].modifiable = false
+        pcall(vim.api.nvim_buf_set_extmark, bufnr, NS, row, 0, { end_col = #line, hl_group = "leetcode_desc_dim" })
+    end))
 end
 
 ---Fetch submissionDetails (for the runtime chart) and redraw when it lands.
@@ -377,30 +408,74 @@ local function past_item(s, d)
     }
 end
 
+---submissionDetails of an earlier submission, in the shape of a submit
+---response so one renderer draws both.
 ---@param s lc.article.Submission
-function Side:open_past(s)
-    self.viewing = { pending = true }
+---@param d table
+local function past_item(s, d)
+    local function val(v)
+        return v ~= vim.NIL and v or nil
+    end
+    local code = val(d.statusCode)
+    return {
+        status_code = code,
+        status_msg = s.statusDisplay,
+        total_correct = val(d.totalCorrect),
+        total_testcases = val(d.totalTestcases),
+        status_runtime = val(d.runtimeDisplay),
+        runtime_percentile = val(d.runtimePercentile),
+        status_memory = val(d.memoryDisplay),
+        memory_percentile = val(d.memoryPercentile),
+        last_testcase = val(d.lastTestcase),
+        code_output = code == 11 and val(d.codeOutput) or nil,
+        expected_output = val(d.expectedOutput),
+        std_output = val(d.stdOutput),
+        full_runtime_error = val(d.runtimeError),
+        full_compile_error = val(d.compileError),
+        submission_id = s.id,
+        timestamp = tonumber(s.timestamp),
+        details = d,
+        past = true,
+    }
+end
+
+---Expand an earlier submission under its row, or collapse it again.
+---@param s lc.article.Submission
+function Side:toggle_past(s)
+    self.expanded = self.expanded or {}
+    if self.expanded[s.id] then
+        self.expanded[s.id] = nil
+        return self:render_submissions()
+    end
+    self.expanded[s.id] = { pending = true }
     self:render_submissions()
     article.submission_details(s.id, function(details)
+        if not (self.expanded and self.expanded[s.id]) then
+            return
+        end
         if not details then
-            self.viewing = nil
+            self.expanded[s.id] = nil
             self:render_submissions()
             return log.error("Could not load submission " .. s.id)
         end
-        self.viewing = past_item(s, details)
+        self.expanded[s.id] = past_item(s, details)
         self:render_submissions()
     end)
 end
 
----The Submissions tab: the latest result (or an opened earlier one), then the
----list of all submissions. Enter or a click opens one; back returns.
+---The Submissions tab: the current result (a spinner while judging), then one
+---collapsible list of previous submissions. Enter or a click toggles the list
+---and expands a submission in place.
 function Side:render_submissions()
     local keys = config.user.keys
+    local icons = config.icons
     local width = self:width()
     local lines, marks, line_hls = {}, {}, {}
     local buttons, links, rows = {}, {}, {}
+    self.spinner_row = nil
+    self.expanded = self.expanded or {}
 
-    local function append(out)
+    local function append(out, item)
         local offset = #lines
         vim.list_extend(lines, out.lines)
         for _, m in ipairs(out.marks) do
@@ -410,55 +485,73 @@ function Side:render_submissions()
             table.insert(line_hls, { row = l.row + offset, hl = l.hl })
         end
         for _, b in ipairs(out.buttons or {}) do
-            table.insert(buttons, { row = b.row + offset, col = b.col, end_col = b.end_col, action = b.action })
+            table.insert(buttons, { row = b.row + offset, col = b.col, end_col = b.end_col, action = b.action, item = item })
         end
         for row, slug in pairs(out.links or {}) do
             links[row + offset] = slug
         end
     end
-    local function text(line, hl)
+    local function text(line, hl, col)
         table.insert(lines, line)
         if hl then
-            table.insert(marks, { row = #lines - 1, col = 0, end_col = #line, hl = hl })
+            table.insert(marks, { row = #lines - 1, col = col or 0, end_col = #line, hl = hl })
         end
     end
+    local render = require("leetcode-ui.splits.submission").render
 
-    local shown = self.viewing or self.latest
-    if self.viewing then
+    local latest = self.latest
+    if latest and latest.pending then
         text("")
-        text(("  %s All submissions  (%s)"):format(config.icons.expand_left, key_text(keys.back)), "leetcode_desc_dim")
-        rows.back = #lines
-    end
-    if shown and shown.pending then
+        text(("  %s Submitting…"):format(require("leetcode-ui.controls").SPINNER[1]), "leetcode_desc_dim")
+        self.spinner_row = #lines - 1
+    elseif latest then
+        append(render(latest, self.question, width, latest.details), latest)
+    else
         text("")
-        text("  " .. (self.viewing and "Loading…" or "Submitting…"), "leetcode_desc_dim")
-    elseif shown then
-        append(require("leetcode-ui.splits.submission").render(shown, self.question, width, shown.details))
+        local key = config.key((config.user.mappings or {}).submit)
+        local hint = key and (" with " .. require("leetcode-ui.controls").display_key(key):gsub("%%%%", "%%")) or ""
+        text("  Nothing submitted yet. Submit" .. hint .. " to see the result here.", "leetcode_desc_dim")
     end
 
-    if not self.viewing then
-        text("")
-        local heading = "  All submissions"
-        text(heading, "leetcode_desc_heading")
+    local latest_id = latest and latest.submission_id and tostring(latest.submission_id)
+    local previous = vim.tbl_filter(function(s)
+        return tostring(s.id) ~= latest_id
+    end, self.submissions or {})
+
+    text("")
+    local open = self.history_open
+    local chevron = open and icons.collapse_down or icons.collapse_right
+    local count = self.submissions and (" (%d)"):format(#previous) or ""
+    text(("  %s Previous submissions%s"):format(chevron, count), "leetcode_desc_heading", 2)
+    rows.history = #lines
+
+    if open then
         if not self.submissions then
-            text("  Loading…", "leetcode_desc_dim")
-        elseif #self.submissions == 0 then
-            text("  No submissions yet", "leetcode_desc_dim")
-        else
-            text(("  %s opens one"):format(key_text(keys.confirm)), "leetcode_desc_dim")
-            text("")
-            for _, s in ipairs(self.submissions) do
-                local ok = s.statusDisplay == "Accepted"
-                local status = ("%-22s"):format(s.statusDisplay)
-                local when = os.date("%Y-%m-%d %H:%M", tonumber(s.timestamp) or 0)
-                text(("  %s %-8s %-9s %-10s %s"):format(status, s.runtime, s.memory, s.lang, when))
-                table.insert(marks, {
-                    row = #lines - 1,
-                    col = 2,
-                    end_col = 2 + #status,
-                    hl = ok and "leetcode_ok" or "leetcode_error",
-                })
-                rows[#lines] = s
+            text("    Loading…", "leetcode_desc_dim")
+        elseif #previous == 0 then
+            text("    None yet", "leetcode_desc_dim")
+        end
+        for _, s in ipairs(previous) do
+            local ok = s.statusDisplay == "Accepted"
+            local item = self.expanded[s.id]
+            local mark = item and icons.collapse_down or icons.collapse_right
+            local status = ("%-22s"):format(s.statusDisplay)
+            local when = os.date("%Y-%m-%d %H:%M", tonumber(s.timestamp) or 0)
+            local prefix = ("    %s "):format(mark)
+            text(("%s%s %-8s %-9s %-10s %s"):format(prefix, status, s.runtime, s.memory, s.lang, when))
+            table.insert(marks, { row = #lines - 1, col = 4, end_col = #prefix, hl = "leetcode_desc_dim" })
+            table.insert(marks, {
+                row = #lines - 1,
+                col = #prefix,
+                end_col = #prefix + #status,
+                hl = ok and "leetcode_ok" or "leetcode_error",
+            })
+            rows[#lines] = s
+            if item and item.pending then
+                text("      Loading…", "leetcode_desc_dim")
+            elseif item then
+                append(render(item, self.question, width, item.details), item)
+                text("")
             end
         end
     end
@@ -481,18 +574,21 @@ function Side:render_submissions()
 
     local function activate()
         local cursor = vim.api.nvim_win_get_cursor(0)
-        if rows.back == cursor[1] then
-            self.viewing = nil
+        if rows.history == cursor[1] then
+            self.history_open = not self.history_open
+            if self.history_open and not self.submissions then
+                self:load_submissions()
+            end
             return self:render_submissions()
         end
         for _, b in ipairs(buttons) do
             if b.row == cursor[1] and cursor[2] >= b.col and cursor[2] < b.end_col then
-                return self:submission_action(b.action, shown)
+                return self:submission_action(b.action, b.item)
             end
         end
         local past = rows[cursor[1]]
         if type(past) == "table" then
-            return self:open_past(past)
+            return self:toggle_past(past)
         end
         local slug = links[cursor[1]]
         local problem = slug and require("leetcode.cache.problemlist").get_by_title_slug(slug)
@@ -501,11 +597,14 @@ function Side:render_submissions()
         end
     end
     map(bufnr, keys.confirm, activate)
+    -- Back collapses whatever is open, innermost first.
     map(bufnr, keys.back, function()
-        if self.viewing then
-            self.viewing = nil
-            self:render_submissions()
+        if next(self.expanded) then
+            self.expanded = {}
+        else
+            self.history_open = false
         end
+        self:render_submissions()
     end)
     vim.keymap.set("n", "<LeftRelease>", activate, { buffer = bufnr })
 end

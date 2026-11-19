@@ -5,8 +5,9 @@ local config = require("leetcode.config")
 ---nothing per redraw.
 local Controls = {}
 
-local SPINNER = { "⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏" }
-local SPINNER_MS = 100
+Controls.SPINNER = { "⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏" }
+Controls.SPINNER_MS = 100
+local SPINNER, SPINNER_MS = Controls.SPINNER, Controls.SPINNER_MS
 
 ---@type table<lc.ui.Question, { action?: "run"|"submit", frame: integer, timer?: uv.uv_timer_t }>
 local state = setmetatable({}, { __mode = "k" })
