@@ -85,6 +85,31 @@ function utils.curl(method, params)
         return err and err.status >= 500 and tries > 0
     end
 
+    -- The browser renews its `cf_clearance` cookie as you browse, so the copy
+    -- saved at sign-in goes stale and Cloudflare starts challenging us. On a
+    -- challenge, take the browser's current cookies and try once more.
+    local cf_retried = params.cf_retried
+    params.cf_retried = nil
+    local function should_refresh(err)
+        if not (err and err.cloudflare) or cf_retried then
+            return false
+        end
+        local Cookie = require("leetcode.cache.cookie")
+        local ok, fresh = pcall(require("leetcode.cache.browser").get)
+        local clearance = ok and fresh and fresh:match("cf_clearance=([^;]+)")
+        local saved = Cookie.read()
+        if not (clearance and saved) or saved:match("cf_clearance=([^;]+)") == clearance then
+            return false
+        end
+        local updated, n = saved:gsub("cf_clearance=[^;]+", function()
+            return "cf_clearance=" .. clearance
+        end)
+        Cookie.write(n > 0 and updated or (saved .. "; cf_clearance=" .. clearance))
+        params_cpy.cf_retried = true
+        log.debug("cloudflare challenge: retrying with the browser's current cookies")
+        return true
+    end
+
     local stop_timing = require("leetcode.timings").start(("api %s %s"):format(method, params.endpoint))
 
     if params.callback then
@@ -98,6 +123,14 @@ function utils.curl(method, params)
                 log.debug("retry " .. tries)
                 params_cpy.retry = tries - 1
                 utils.curl(method, params_cpy)
+            elseif err and err.cloudflare and not cf_retried then
+                vim.schedule(function()
+                    if should_refresh(err) then
+                        utils.curl(method, params_cpy)
+                    else
+                        cb(res, err)
+                    end
+                end)
             else
                 cb(res, err)
             end
@@ -113,7 +146,9 @@ function utils.curl(method, params)
         if should_retry(err) then
             log.debug("retry " .. tries)
             params_cpy.retry = tries - 1
-            utils.curl(method, params_cpy)
+            return utils.curl(method, params_cpy)
+        elseif should_refresh(err) then
+            return utils.curl(method, params_cpy)
         else
             return res, err
         end

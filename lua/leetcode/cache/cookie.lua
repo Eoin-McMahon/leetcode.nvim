@@ -33,6 +33,15 @@ function Cookie.set(str)
     end
 end
 
+---Save a cookie string without checking it with LeetCode.
+---@param str string
+function Cookie.write(str)
+    file:write(str, "w")
+    for k in pairs(hist) do
+        hist[k] = nil
+    end
+end
+
 ---@return boolean
 function Cookie.delete()
     if not file:exists() then

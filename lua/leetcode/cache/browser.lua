@@ -36,9 +36,15 @@ local chromium_sql = "select value from meta where key = 'version';"
     .. "select name, value, hex(substr(encrypted_value, 4)) from cookies where host_key in "
     .. hosts
     .. " order by expires_utc"
+-- Containers keep separate cookies for the same host. Take them all from the
+-- container used most recently for LeetCode, so the session, the csrf token
+-- and Cloudflare's clearance belong together.
 local firefox_sql = "select name, value from moz_cookies where host in "
     .. hosts
-    .. " order by expiry"
+    .. " and originAttributes = (select originAttributes from moz_cookies where host in "
+    .. hosts
+    .. " and name = 'LEETCODE_SESSION' order by lastAccessed desc limit 1)"
+    .. " order by lastAccessed"
 
 ---@param hex string
 local function unhex(hex)

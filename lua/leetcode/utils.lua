@@ -153,4 +153,11 @@ function utils.section_tag(name, start)
     return ("@leet %s %s"):format(name, start and "start" or "end")
 end
 
+---@param line string
+---@return boolean
+function utils.is_section_tag(line)
+    local rest = line:match("@leet.*$")
+    return rest ~= nil and (rest:match("^@leet[%w ]-start%s*$") or rest:match("^@leet[%w ]-end%s*$")) ~= nil
+end
+
 return utils

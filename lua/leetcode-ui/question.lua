@@ -256,16 +256,18 @@ end
 function Question:injector(code)
     local inject = config.user.injector[self.lang] or {}
 
-    local parts = { self:editor_section(code, "code") }
+    -- New files hold only what gets sent, like the website's editor: no
+    -- `@leet` tags, and imports only when the user configured some.
+    local parts = { code }
 
     local before = self:inject(true)
     if before then
         table.insert(parts, 1, before)
     end
 
-    local imports = self:inject_imports()
+    local imports = inject.imports and self:inject_imports()
     if imports then
-        table.insert(parts, 1, self:editor_section(table.concat(imports, "\n"), "imports"))
+        table.insert(parts, 1, table.concat(imports, "\n"))
     end
 
     local after = self:inject(false)
@@ -598,6 +600,17 @@ function Question:editor_section_range(name, inclusive)
         elseif line:match(end_tag) then
             end_i = i - (inclusive and 0 or 1)
         end
+    end
+
+    -- Without both code tags the whole buffer is the code. Files made before
+    -- tags were dropped keep working, and deleting a tag by accident is
+    -- harmless. Leftover tag lines are sent as blank lines so error line
+    -- numbers still match the buffer.
+    if name == "code" and not (start_i and end_i and start_i <= end_i + 1) then
+        start_i, end_i = 1, #lines
+        lines = vim.tbl_map(function(line)
+            return utils.is_section_tag(line) and "" or line
+        end, lines)
     end
 
     local res = {

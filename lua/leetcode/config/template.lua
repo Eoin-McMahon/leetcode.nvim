@@ -279,14 +279,14 @@ local M = {
         decoy = true, ---@type boolean
     },
 
-    ---Result polling after Run and Submit, in milliseconds. LeetCode's rate
-    ---limit is unknown, so keep `fast` at 150 or above.
+    ---Result polling after Run and Submit, in milliseconds. Faster polling
+    ---makes Cloudflare's bot check more likely, so keep `fast` at 400 or above.
     poll = {
-        fast = 200, ---@type integer
-        fast_for = 3000, ---@type integer
-        slow = 500, ---@type integer
+        fast = 500, ---@type integer
+        fast_for = 4000, ---@type integer
+        slow = 1000, ---@type integer
         slow_for = 15000, ---@type integer
-        slowest = 1000, ---@type integer
+        slowest = 2000, ---@type integer
     },
 
     ---Record how long UI actions and API calls take. `:Leet timings` shows them.

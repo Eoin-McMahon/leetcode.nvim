@@ -57,9 +57,16 @@ function interpreter.listener(id, callback)
         return poll.slowest
     end
 
+    -- The run is already queued, so a check that Cloudflare or the rate limit
+    -- turns away is retried after a pause rather than reported.
+    local blocked = 0
+
     local function listen()
         interpreter.check(id, function(item, err)
-            if err then -- error
+            if err and (err.cloudflare or err.status == 429) and blocked < 3 then
+                blocked = blocked + 1
+                vim.defer_fn(listen, 2000 * blocked)
+            elseif err then
                 callback(nil, nil, err)
             elseif item.status_code then -- got results
                 item = interpreter:handle_item(item)
